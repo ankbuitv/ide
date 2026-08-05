@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -10,8 +10,9 @@
     <Product>ide.ankb</Product>
     <Version>1.0.0</Version>
     <Authors>ankbuitv</Authors>
-    <Description>ide.ankb Desktop — C++ IDE with Judge0 CE compiler (no Wandbox)</Description>
+    <Description>ide.ankb Desktop — C++ IDE with Judge0 CE compiler (no Wandbox) — .NET 10</Description>
     <ApplicationIcon>..\public\logo.png</ApplicationIcon>
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
