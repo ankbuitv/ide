@@ -1,10 +1,10 @@
 <Window x:Class="IdeAnkb.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="ide.ankb — C++ Online IDE Desktop (Judge0 CE + Local g++ + Discord RPC)" Height="900" Width="1400"
+        Title="ide.ankb — C++ Online IDE Desktop (Local g++)" Height="900" Width="1400"
         Background="#0d1117" Foreground="#c9d1d9"
         WindowStartupLocation="CenterScreen"
-        Icon="../public/logo.png"
+        Icon="pack://application:,,,/logo.ico"
         Closing="Window_Closing">
     <Grid>
         <Grid.RowDefinitions>
@@ -38,7 +38,7 @@
         <Border Grid.Row="0" Grid.Column="1" Background="#161b22" BorderBrush="#30363d" BorderThickness="0,0,0,1">
             <DockPanel Margin="12,0">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Image Source="../public/logo.png" Width="28" Height="28" Margin="0,0,10,0"/>
+                    <Image Source="pack://application:,,,/logo.png" Width="28" Height="28" Margin="0,0,10,0"/>
                     <TextBlock Text="ide.ankb" FontWeight="Bold" FontFamily="Consolas" FontSize="14" VerticalAlignment="Center">
                         <TextBlock.Foreground>
                             <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
