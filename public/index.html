@@ -1,256 +1,282 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>ide.ankb — C++ Online IDE</title>
-<meta name="description" content="ide.ankb — Cursor-lite VS Code style C++ IDE with Judge0 CE default, local g++ fallback, glassmorphism"/>
-<meta name="theme-color" content="#0b1220"/>
-<link rel="icon" type="image/png" href="/logo.png"/>
-<link rel="apple-touch-icon" href="/logo.png"/>
-<meta property="og:title" content="ide.ankb — C++ Online IDE"/>
-<meta property="og:image" content="/logo.png"/>
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-<style>
-:root{
-  --bg-0:#0b1220; --bg-1:#111a2b; --bg-2:#151f33; --bg-3:#1a2741; --bg-glass:rgba(17,26,43,0.7);
-  --border:#1e2d4a; --border-2:#2a3d5f; --text:#c9d1d9; --text-dim:#8b949e; --text-mute:#6e7681;
-  --accent:#2f81f7; --accent-2:#58a6ff; --green:#3fb950; --red:#f85149; --yellow:#d29922; --orange:#db6d28; --purple:#a371f7;
-  --shadow:0 8px 32px rgba(0,0,0,.5); --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-}
-*{box-sizing:border-box} html,body{height:100%;margin:0}
-body{background:radial-gradient(1200px 600px at 20% -10%, rgba(47,129,247,0.15), transparent), radial-gradient(1000px 500px at 80% 0%, rgba(163,113,247,0.12), transparent), var(--bg-0); color:var(--text); font-family:var(--sans); font-size:13px; overflow:hidden; -webkit-font-smoothing:antialiased}
-.app{display:grid;grid-template-columns:48px 260px 1fr;grid-template-rows:44px 38px 1fr 22px;height:100vh}
-.sidebar{grid-row:1/5; background:rgba(11,18,32,0.9); backdrop-filter:blur(20px); border-right:1px solid var(--border); display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:4px; user-select:none}
-.side-icon{width:36px;height:36px; display:flex;align-items:center;justify-content:center; border-radius:10px; color:var(--text-dim); cursor:pointer; transition:all .15s ease; position:relative}
-.side-icon:hover{background:var(--bg-3);color:var(--text); transform:translateY(-1px)} .side-icon.active{background:rgba(47,129,247,.15);color:var(--accent-2)} .side-icon.active::after{content:'';position:absolute;left:-8px;top:25%;bottom:25%;width:2px;background:var(--accent);border-radius:2px}
-.side-icon i{width:20px;height:20px}
-.explorer{grid-row:1/5; background:rgba(13,20,36,0.8); backdrop-filter:blur(20px); border-right:1px solid var(--border); display:flex;flex-direction:column; overflow:hidden}
-.explorer-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-dim); border-bottom:1px solid var(--border)}
-.explorer-actions{display:flex;gap:4px} .explorer-actions button{background:transparent;border:0;color:var(--text-dim);cursor:pointer;padding:2px 4px;border-radius:4px} .explorer-actions button:hover{background:var(--bg-3);color:var(--text)}
-.file-tree{flex:1;overflow-y:auto;padding:8px 0} .file-item{display:flex;align-items:center;gap:8px;padding:4px 12px;font-size:12px;cursor:pointer;border-radius:0 6px 6px 0;margin:1px 8px 1px 0;transition:all .12s} .file-item:hover{background:var(--bg-2)} .file-item.active{background:var(--bg-3);color:var(--text);border-left:2px solid var(--accent)} .file-item i{width:14px;height:14px;flex:0 0 14px} .file-item .actions{margin-left:auto;display:none;gap:2px} .file-item:hover .actions{display:flex} .file-item .actions button{background:transparent;border:0;color:var(--text-mute);cursor:pointer;padding:1px 3px;border-radius:3px} .file-item .actions button:hover{color:var(--text);background:var(--bg-3)}
-.topbar{grid-column:3; display:flex;align-items:center;height:44px;padding:0 12px;background:var(--bg-glass);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);user-select:none;gap:10px; position:relative}
-.topbar::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(47,129,247,.05),transparent 30%,transparent 70%,rgba(163,113,247,.05));pointer-events:none}
-.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.2px;color:var(--text);font-family:var(--mono); z-index:1} .brand .logo-img{width:28px;height:28px;border-radius:8px;object-fit:cover;box-shadow:0 1px 0 rgba(255,255,255,.15) inset,0 2px 8px rgba(0,0,0,.5);border:1px solid var(--border);flex:0 0 28px} .brand .brand-text{font-size:14px;background:linear-gradient(90deg,#58a6ff,#a371f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.command-bar{flex:1;display:flex;justify-content:center;z-index:1} .command-input{width:100%;max-width:420px;background:rgba(26,39,65,0.8);border:1px solid var(--border);border-radius:8px;padding:6px 12px 6px 32px;font-size:12px;color:var(--text-dim);backdrop-filter:blur(10px);transition:all .15s; position:relative} .command-input::placeholder{color:var(--text-mute)} .command-input:focus{outline:none;border-color:var(--accent);background:rgba(26,39,65,0.9);color:var(--text);box-shadow:0 0 0 3px rgba(47,129,247,.15)} .command-bar-wrap{position:relative;width:100%;max-width:420px} .command-bar-wrap i{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--text-mute);pointer-events:none}
-.topbar .spacer{flex:0} .topbar-right{display:flex;align-items:center;gap:8px;margin-left:auto;z-index:1}
-.select-wrap{position:relative} .select-wrap select{appearance:none;background:var(--bg-2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 24px 6px 10px;font-size:11px;font-weight:500;cursor:pointer;transition:border .12s} .select-wrap select:hover{border-color:var(--border-2)} .select-wrap select:focus{outline:none;border-color:var(--accent)} .select-wrap::after{content:'▾';position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--text-mute);pointer-events:none;font-size:10px}
-.badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.3px;border:1px solid;cursor:pointer;transition:all .2s;position:relative;backdrop-filter:blur(10px)} .badge .dot{width:8px;height:8px;border-radius:50%;}
-.badge.online{background:rgba(63,185,80,.12);color:var(--green);border-color:rgba(63,185,80,.3);} .badge.online .dot{background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite}
-.badge.connecting{background:rgba(210,153,34,.12);color:var(--yellow);border-color:rgba(210,153,34,.3);} .badge.connecting .dot{background:var(--yellow);animation:pulse 1s infinite}
-.badge.offline{background:rgba(248,81,73,.12);color:var(--red);border-color:rgba(248,81,73,.3);} .badge.offline .dot{background:var(--red);}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-.badge .tooltip{visibility:hidden;position:absolute;top:calc(100% + 8px);right:0;background:var(--bg-2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:11px;font-weight:400;min-width:240px;max-width:340px;box-shadow:var(--shadow);z-index:100;white-space:pre-wrap;line-height:1.5;opacity:0;transform:translateY(4px);transition:all .15s;backdrop-filter:blur(20px)} .badge:hover .tooltip{visibility:visible;opacity:1;transform:none}
-.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;background:rgba(26,39,65,0.5);color:var(--text-dim);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:all .15s;backdrop-filter:blur(5px)} .icon-btn:hover{background:var(--bg-3);color:var(--text);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.2)} .icon-btn svg{width:16px;height:16px}
-.run-btn{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(180deg,#2ea043,#238636);color:#fff;border:1px solid #2ea043;padding:6px 16px;height:34px;border-radius:10px;font-weight:700;font-size:12px;cursor:pointer;box-shadow:0 1px 0 rgba(255,255,255,.12) inset,0 2px 8px rgba(35,134,54,.3);transition:all .15s;position:relative;overflow:hidden} .run-btn:hover{background:linear-gradient(180deg,#2fb44e,#2a9a3e);transform:translateY(-1px);box-shadow:0 6px 16px rgba(35,134,54,.4)} .run-btn:active{transform:translateY(0)} .run-btn[disabled]{opacity:.6;cursor:not-allowed;filter:grayscale(.3)} .run-btn.running{background:linear-gradient(180deg,#d29922,#b47d1a);border-color:#d29922;animation:runningPulse 1.2s infinite} .run-btn.success{background:linear-gradient(180deg,#3fb950,#2ea043)} .run-btn.failed{background:linear-gradient(180deg,#f85149,#da3633)} @keyframes runningPulse{0%,100%{box-shadow:0 0 0 0 rgba(210,153,34,.4)}50%{box-shadow:0 0 0 10px rgba(210,153,34,0)}}
-.run-btn .key{margin-left:4px;padding:2px 6px;font-size:10px;background:rgba(0,0,0,.25);border-radius:5px;border:1px solid rgba(255,255,255,.15)}
-.tabbar{grid-column:3; display:flex;align-items:center;gap:0;background:rgba(17,26,43,0.6);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);padding:0 8px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
-.tabbar::-webkit-scrollbar{display:none}
-.tab{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;height:32px;font-size:12px;background:transparent;color:var(--text-dim);border-right:1px solid var(--border);cursor:pointer;white-space:nowrap;transition:all .12s;position:relative;min-width:120px} .tab:hover{background:rgba(26,39,65,0.5);color:var(--text)} .tab.active{background:var(--bg-0);color:var(--text);border-top:2px solid var(--accent)} .tab.active::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:1px;background:var(--bg-0)} .tab .lang-dot{width:8px;height:8px;border-radius:50%;background:#f34b7d;flex:0 0 8px} .tab .close{margin-left:auto;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:4px;color:var(--text-mute);font-size:14px} .tab .close:hover{background:rgba(248,81,73,.15);color:var(--red)} .tab .dirty{width:6px;height:6px;border-radius:50%;background:var(--accent-2);margin-left:4px}
-.tabbar .tab-actions{margin-left:auto;display:flex;gap:6px;align-items:center;padding-left:12px}
-.workarea{grid-column:3; display:grid;grid-template-columns:1fr 8px 420px;min-height:0;background:var(--bg-0)}
-.gutter{background:transparent;cursor:col-resize;position:relative} .gutter::after{content:'';position:absolute;top:0;bottom:0;left:3px;width:2px;background:var(--border);transition:background .15s} .gutter:hover::after{background:var(--accent)}
-.explorer-gutter{width:4px;background:transparent;cursor:col-resize} .explorer-gutter:hover{background:var(--accent)}
-.editor-pane{background:var(--bg-0);position:relative;min-width:200px} .editor-host{position:absolute;inset:0}
-.right-pane{display:grid;grid-template-rows:36px 1fr 36px 1fr;background:var(--bg-1);border-left:1px solid var(--border);min-width:240px;backdrop-filter:blur(10px)}
-.pane-head{display:flex;align-items:center;gap:8px;padding:0 12px;background:rgba(21,31,51,0.8);border-bottom:1px solid var(--border);color:var(--text-dim);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;backdrop-filter:blur(10px)} .pane-head .pane-title{color:var(--text)} .pane-head .actions{margin-left:auto;display:flex;gap:4px} .pane-head .chip{font-size:10px;padding:3px 8px;background:var(--bg-3);color:var(--text-dim);border:1px solid var(--border);border-radius:6px;font-weight:500;text-transform:none}
-.pane-body{position:relative;min-height:0;overflow:hidden} .pane-body textarea{position:absolute;inset:0;width:100%;height:100%;resize:none;border:0;outline:none;padding:12px;background:var(--bg-0);color:var(--text);font-family:var(--mono);font-size:13px;line-height:1.6;tab-size:4}
-.output{position:absolute;inset:0;overflow:auto;padding:12px;font-family:var(--mono);font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word;background:var(--bg-0)} .output .stderr{color:var(--red)} .output .meta{color:var(--text-mute);font-size:11px;border-top:1px dashed var(--border);margin-top:12px;padding-top:8px;display:flex;gap:12px;flex-wrap:wrap} .output .meta .ok{color:var(--green)} .output .meta .err{color:var(--red)} .output .empty{color:var(--text-mute);font-style:italic}
-.output.success{border-left:3px solid var(--green)} .output.error{border-left:3px solid var(--red)} .output.warning{border-left:3px solid var(--yellow)}
-.statusbar{grid-column:3; display:flex;align-items:center;gap:14px;background:rgba(17,26,43,0.8);backdrop-filter:blur(20px);border-top:1px solid var(--border);padding:0 12px;font-size:11px;color:var(--text-dim);user-select:none}
-.statusbar .seg{display:inline-flex;align-items:center;gap:6px} .statusbar .seg svg{width:12px;height:12px} .statusbar .accent{color:var(--accent-2)} .statusbar .right{margin-left:auto;display:flex;gap:14px} .statusbar .build-progress{width:80px;height:3px;background:var(--bg-3);border-radius:2px;overflow:hidden;display:none} .statusbar .build-progress .bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--purple));width:0%;animation:buildAnim 1.2s infinite}
-@keyframes buildAnim{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
-.toast-host{position:fixed;right:16px;bottom:32px;z-index:9999;display:flex;flex-direction:column;gap:8px} .toast{min-width:280px;max-width:400px;padding:12px 14px;background:rgba(21,31,51,0.9);color:var(--text);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;box-shadow:var(--shadow);font-size:12px;animation:slideIn .2s ease;backdrop-filter:blur(20px)} .toast.error{border-left-color:var(--red)} .toast.ok{border-left-color:var(--green)} .toast.warn{border-left-color:var(--yellow)} @keyframes slideIn{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
-.spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block} @keyframes spin{to{transform:rotate(360deg)}}
-#ctx-menu{position:fixed;z-index:10000;min-width:260px;padding:8px;background:rgba(21,31,51,0.95);border:1px solid var(--border-2);border-radius:12px;box-shadow:var(--shadow);font-family:var(--sans);font-size:12px;color:var(--text);animation:ctxIn .1s ease-out;backdrop-filter:blur(20px)} @keyframes ctxIn{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:none}} #ctx-menu ul{list-style:none;margin:0;padding:0} #ctx-menu li.ctx-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;user-select:none} #ctx-menu li.ctx-item:hover{background:var(--bg-3)} #ctx-menu li.ctx-item.disabled{color:var(--text-mute);opacity:.5;pointer-events:none} #ctx-menu li.ctx-item.danger{color:#ff8b8b} #ctx-menu li.ctx-item.danger:hover{background:rgba(248,81,73,.12)} #ctx-menu li.ctx-item .ctx-ico{width:16px;height:16px;color:var(--accent-2)} #ctx-menu li.ctx-item .ctx-text{flex:1} #ctx-menu li.ctx-item .ctx-sc{font-family:var(--mono);font-size:10px;color:var(--text-mute);background:var(--bg-1);padding:2px 6px;border-radius:5px;border:1px solid var(--border)} #ctx-menu li.ctx-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-mute);padding:8px 10px 4px;cursor:default} #ctx-menu li.ctx-sep{height:1px;background:var(--border);margin:6px}
-/* Modals */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);z-index:9998;display:none;align-items:center;justify-content:center} .modal-overlay.active{display:flex;animation:fadeIn .15s ease} @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-.modal{background:rgba(21,31,51,0.95);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);backdrop-filter:blur(30px);width:90%;max-width:600px;max-height:80vh;overflow:hidden;animation:modalIn .2s ease} @keyframes modalIn{from{transform:translateY(20px) scale(.98);opacity:0}to{transform:none;opacity:1}}
-.modal.command-palette{max-width:640px} .modal .modal-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px} .modal .modal-head input{flex:1;background:var(--bg-0);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;outline:none} .modal .modal-head input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,129,247,.15)} .modal .modal-body{max-height:50vh;overflow-y:auto;padding:8px} .modal .cmd-item{padding:10px 12px;border-radius:8px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all .12s} .modal .cmd-item:hover,.modal .cmd-item.active{background:var(--bg-3)} .modal .cmd-item i{width:18px;height:18px;color:var(--text-dim)} .modal .cmd-item .cmd-text{flex:1} .modal .cmd-item .cmd-title{font-weight:500;color:var(--text)} .modal .cmd-item .cmd-desc{font-size:11px;color:var(--text-mute)} .modal .cmd-item .cmd-shortcut{font-family:var(--mono);font-size:10px;color:var(--text-mute);background:var(--bg-1);padding:2px 6px;border-radius:4px;border:1px solid var(--border)}
-.settings-grid{display:grid;grid-template-columns:140px 1fr;gap:12px;padding:16px} .settings-grid label{font-size:12px;color:var(--text-dim);font-weight:500} .settings-grid select,.settings-grid input{background:var(--bg-0);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px}
-.welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:40px;text-align:center} .welcome h1{font-size:32px;font-weight:800;background:linear-gradient(90deg,#58a6ff,#a371f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px} .welcome p{color:var(--text-mute);margin-bottom:24px} .welcome-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:400px;width:100%} .welcome-btn{padding:14px 16px;background:var(--bg-2);border:1px solid var(--border);border-radius:10px;text-align:left;cursor:pointer;transition:all .15s} .welcome-btn:hover{background:var(--bg-3);border-color:var(--border-2);transform:translateY(-1px)} .welcome-btn .icon{font-size:20px;margin-bottom:8px} .welcome-btn .title{font-weight:600;color:var(--text);margin-bottom:4px} .welcome-btn .desc{font-size:11px;color:var(--text-mute)}
-.no-select{-webkit-user-select:none;-moz-user-select:none;user-select:none}
-@media (max-width: 1100px){ .app{grid-template-columns:48px 1fr} .explorer{display:none} .workarea{grid-column:2} .command-bar{display:none} }
-@media (max-width: 700px){ .app{grid-template-columns:1fr;grid-template-rows:44px 1fr} .sidebar,.explorer,.tabbar{display:none} .topbar{grid-column:1} .workarea{grid-column:1;grid-template-columns:1fr;grid-template-rows:1fr 8px 1fr} .statusbar{grid-column:1} }
-</style>
-</head>
-<body>
-<div class="app">
-  <nav class="sidebar no-select" aria-label="Activity Bar">
-    <div class="side-icon active" data-action="explorer" title="Explorer (Ctrl+Shift+E)"><i data-lucide="files"></i></div>
-    <div class="side-icon" data-action="search" title="Search (Ctrl+Shift+F)"><i data-lucide="search"></i></div>
-    <div class="side-icon" data-action="git" title="Source Control"><i data-lucide="git-branch"></i></div>
-    <div class="side-icon" data-action="run" title="Run and Debug"><i data-lucide="play"></i></div>
-    <div class="side-icon" data-action="extensions" title="Extensions"><i data-lucide="puzzle"></i></div>
-    <div class="spacer"></div>
-    <div class="side-icon" data-action="open" title="Open File (Ctrl+O)"><i data-lucide="folder-open"></i></div>
-    <div class="side-icon" data-action="download" title="Download (Ctrl+S)"><i data-lucide="download"></i></div>
-    <div class="side-icon settings" data-action="settings" title="Settings"><i data-lucide="settings"></i></div>
-  </nav>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ide.ankb — C++ Online IDE</title>
+    <meta name="description" content="ide.ankb — Fast, dark VS Code–style C++ IDE with Monaco, Judge0 CE fallback." />
+    <meta name="theme-color" content="#0d1117" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <meta property="og:title" content="ide.ankb — C++ Online IDE" />
+    <meta property="og:description" content="Fast, dark, VS Code–style C++ IDE with Monaco, sandboxed execution, Judge0/Piston/Wandbox fallback." />
+    <meta property="og:image" content="/logo.png" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mono-icons@1.9.0/iconfont/icons.css" />
+    <style>
+      :root{
+        --bg-0:#0d1117; --bg-1:#161b22; --bg-2:#1c2128; --bg-3:#21262d;
+        --border:#30363d; --border-2:#3a4148; --text:#c9d1d9; --text-dim:#8b949e; --text-mute:#6e7681;
+        --accent:#2f81f7; --accent-2:#58a6ff; --green:#3fb950; --red:#f85149; --yellow:#d29922; --orange:#db6d28; --purple:#a371f7;
+        --shadow:0 8px 24px rgba(0,0,0,.4); --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+      }
+      *{box-sizing:border-box} html,body{height:100%;margin:0}
+      body{background:var(--bg-0);color:var(--text);font-family:var(--sans);font-size:13px;overflow:hidden;-webkit-font-smoothing:antialiased}
+      .app{display:grid;grid-template-columns:48px 1fr;grid-template-rows:44px 28px 1fr 22px;height:100vh}
+      /* Sidebar */
+      .sidebar{grid-row:1 / 5; background:linear-gradient(180deg,#0d1117 0%,#121821 100%); border-right:1px solid var(--border); display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:4px; user-select:none}
+      .sidebar .side-icon{width:36px;height:36px; display:flex;align-items:center;justify-content:center; border-radius:8px; color:var(--text-dim); cursor:pointer; transition:all .15s ease; font-size:18px; position:relative}
+      .sidebar .side-icon:hover{background:var(--bg-3);color:var(--text)}
+      .sidebar .side-icon.active{background:rgba(47,129,247,.15);color:var(--accent-2); border-left:2px solid var(--accent)}
+      .sidebar .side-icon.active::after{content:'';position:absolute;left:-8px;top:20%;bottom:20%;width:2px;background:var(--accent);border-radius:2px}
+      .sidebar .spacer{flex:1}
+      .sidebar .side-icon.settings{margin-bottom:4px}
+      /* Topbar */
+      .topbar{grid-column:2; display:flex;align-items:center;height:44px;padding:0 12px;background:linear-gradient(180deg,#161b22 0%,#131820 100%);border-bottom:1px solid var(--border);user-select:none;gap:10px}
+      .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.2px;color:var(--text);font-family:var(--mono)}
+      .brand .logo-img{width:28px;height:28px;border-radius:8px;object-fit:cover;box-shadow:0 1px 0 rgba(255,255,255,.15) inset,0 2px 8px rgba(0,0,0,.5);border:1px solid var(--border);flex:0 0 28px}
+      .brand .brand-text{font-size:14px;background:linear-gradient(90deg,#58a6ff,#a371f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+      .menu-bar{display:flex;align-items:center;gap:2px;margin-left:8px}
+      .menu-item{padding:4px 8px;border-radius:5px;font-size:12px;color:var(--text-dim);cursor:pointer;transition:all .12s}
+      .menu-item:hover{background:var(--bg-3);color:var(--text)}
+      .crumbs{display:flex;align-items:center;gap:6px;color:var(--text-dim);margin-left:8px;font-size:12px}
+      .crumbs .sep{color:var(--text-mute)} .crumbs .file{color:var(--text);font-family:var(--mono)}
+      .topbar .spacer{flex:1}
+      .select-wrap{position:relative}
+      .select-wrap select{appearance:none;background:var(--bg-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 24px 5px 8px;font-size:11px;font-weight:500;cursor:pointer;transition:border .12s}
+      .select-wrap select:hover{border-color:var(--border-2)} .select-wrap select:focus{outline:none;border-color:var(--accent)}
+      .select-wrap::after{content:'▾';position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--text-mute);pointer-events:none;font-size:10px}
+      .badge{ display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.3px; border:1px solid; cursor:default; transition:all .2s; position:relative}
+      .badge .dot{width:8px;height:8px;border-radius:50%;}
+      .badge.online{ background:rgba(63,185,80,.12); color:var(--green); border-color:rgba(63,185,80,.3); }
+      .badge.online .dot{background:var(--green);box-shadow:0 0 8px var(--green); animation:pulse 2s infinite}
+      .badge.connecting{ background:rgba(210,153,34,.12); color:var(--yellow); border-color:rgba(210,153,34,.3); }
+      .badge.connecting .dot{background:var(--yellow);box-shadow:0 0 8px var(--yellow); animation:pulse 1s infinite}
+      .badge.offline{ background:rgba(248,81,73,.12); color:var(--red); border-color:rgba(248,81,73,.3); }
+      .badge.offline .dot{background:var(--red);box-shadow:0 0 8px var(--red);}
+      @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+      .badge .tooltip{visibility:hidden;position:absolute;top: calc(100% + 8px);right:0; background:var(--bg-2); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:11px; font-weight:400; letter-spacing:0; min-width:220px; max-width:320px; box-shadow:var(--shadow); z-index:100; white-space:pre-wrap; line-height:1.4; opacity:0; transform:translateY(4px); transition:all .15s}
+      .badge:hover .tooltip{visibility:visible; opacity:1; transform:none}
+      .icon-btn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:transparent;color:var(--text-dim);border:1px solid transparent;border-radius:6px;cursor:pointer;transition:all .12s}
+      .icon-btn:hover{background:var(--bg-3);color:var(--text)} .icon-btn svg{width:16px;height:16px}
+      .run-btn{ display:inline-flex;align-items:center;gap:8px; background:linear-gradient(180deg,#2ea043,#238636); color:#fff; border:1px solid #2ea043; padding:6px 14px; height:32px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer; box-shadow:0 1px 0 rgba(255,255,255,.12) inset,0 1px 2px rgba(0,0,0,.3); transition:all .15s; position:relative; overflow:hidden}
+      .run-btn:hover{background:linear-gradient(180deg,#2fb44e,#2a9a3e); transform:translateY(-1px); box-shadow:0 4px 12px rgba(35,134,54,.4)} .run-btn:active{transform:translateY(0)}
+      .run-btn[disabled]{opacity:.6;cursor:not-allowed;filter:grayscale(.3)} .run-btn.running{background:linear-gradient(180deg,#d29922,#b47d1a); border-color:#d29922; animation:runningPulse 1.2s infinite}
+      .run-btn.success{background:linear-gradient(180deg,#3fb950,#2ea043); border-color:#3fb950} .run-btn.failed{background:linear-gradient(180deg,#f85149,#da3633); border-color:#f85149}
+      @keyframes runningPulse{0%,100%{box-shadow:0 0 0 0 rgba(210,153,34,.4)}50%{box-shadow:0 0 0 8px rgba(210,153,34,0)}}
+      .run-btn .key{margin-left:4px;padding:1px 6px;font-size:10px;background:rgba(0,0,0,.25);border-radius:4px;border:1px solid rgba(255,255,255,.15)}
+      /* Tabbar */
+      .tabbar{grid-column:2; display:flex;align-items:center;gap:4px;background:var(--bg-1);border-bottom:1px solid var(--border);padding:0 8px;overflow:hidden}
+      .tab{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;height:22px;font-size:12px;background:var(--bg-2);color:var(--text);border:1px solid var(--border);border-bottom:none;border-top-left-radius:6px;border-top-right-radius:6px;position:relative;top:1px}
+      .tab .lang-dot{width:8px;height:8px;border-radius:50%;background:#f34b7d;box-shadow:0 0 4px #f34b7d} .tab .close{margin-left:4px;cursor:pointer;color:var(--text-mute);font-size:14px} .tab .close:hover{color:var(--red)}
+      .tabbar .tab-actions{margin-left:auto;display:flex;gap:4px}
+      /* Workarea */
+      .workarea{grid-column:2; display:grid;grid-template-columns:1fr 8px 420px;min-height:0}
+      .gutter{background:transparent;cursor:col-resize;position:relative} .gutter::after{content:'';position:absolute;top:0;bottom:0;left:3px;width:2px;background:var(--border);transition:background .15s} .gutter:hover::after{background:var(--accent)}
+      .editor-pane{background:var(--bg-0);position:relative;min-width:200px} .editor-host{position:absolute;inset:0}
+      .right-pane{display:grid;grid-template-rows:36px 1fr 36px 160px 36px 1fr;background:var(--bg-1);border-left:1px solid var(--border);min-width:240px}
+      .test-case{padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;background:var(--bg-0);cursor:pointer;transition:background .12s}
+      .test-case:hover{background:var(--bg-2)} .test-case.active{background:var(--bg-2);border-left:2px solid var(--accent)}
+      .test-case .tc-head{display:flex;align-items:center;gap:6px;font-weight:600} .test-case .tc-status{margin-left:auto;padding:2px 6px;border-radius:4px;font-size:10px}
+      .test-case .tc-status.pass{background:rgba(63,185,80,.15);color:var(--green);border:1px solid rgba(63,185,80,.3)} .test-case .tc-status.fail{background:rgba(248,81,73,.15);color:var(--red);border:1px solid rgba(248,81,73,.3)} .test-case .tc-status.running{background:rgba(210,153,34,.15);color:var(--yellow)}
+      .test-case .tc-body{margin-top:6px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px}
+      .test-case .tc-io{background:var(--bg-1);border:1px solid var(--border);border-radius:4px;padding:4px 6px;white-space:pre-wrap;max-height:60px;overflow:auto;font-family:var(--mono)}
+      .test-case .tc-io.mismatch{border-color:var(--red);background:rgba(248,81,73,.08)}
+      .test-case .tc-io.match{border-color:var(--green);background:rgba(63,185,80,.08)}
+      .pane-head{display:flex;align-items:center;gap:8px;padding:0 10px;background:var(--bg-2);border-bottom:1px solid var(--border);color:var(--text-dim);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;min-height:0}
+      .pane-head .pane-title{color:var(--text)} .pane-head .actions{margin-left:auto;display:flex;gap:4px} .pane-head .chip{font-size:10px;padding:2px 6px;background:var(--bg-3);color:var(--text-dim);border:1px solid var(--border);border-radius:4px;font-weight:500;text-transform:none;letter-spacing:0}
+      .pane-body{position:relative;min-height:0;overflow:hidden} .pane-body textarea{position:absolute;inset:0;width:100%;height:100%;resize:none;border:0;outline:none;padding:10px 12px;background:var(--bg-0);color:var(--text);font-family:var(--mono);font-size:13px;line-height:1.55;tab-size:4}
+      .output{position:absolute;inset:0;overflow:auto;padding:10px 12px;font-family:var(--mono);font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word;background:var(--bg-0);transition:border .15s}
+      .output.success{border-left:3px solid var(--green)} .output.error{border-left:3px solid var(--red)} .output.warning{border-left:3px solid var(--yellow)} .output.info{border-left:3px solid var(--accent)}
+      .output .stderr{color:var(--red)} .output .stdout{color:var(--text)} .output .meta{color:var(--text-mute);font-size:11px;border-top:1px dashed var(--border);margin-top:8px;padding-top:6px;display:flex;gap:12px;flex-wrap:wrap}
+      .output .meta .ok{color:var(--green)} .output .meta .err{color:var(--red)} .output .empty{color:var(--text-mute);font-style:italic;user-select:none}
+      .output .compile-error{color:var(--red);font-weight:600}
+      /* Statusbar */
+      .statusbar{grid-column:2; display:flex;align-items:center;gap:14px;background:linear-gradient(180deg,#161b22 0%,#131820 100%);border-top:1px solid var(--border);padding:0 10px;font-size:11px;color:var(--text-dim);user-select:none}
+      .statusbar .seg{display:inline-flex;align-items:center;gap:6px} .statusbar .seg svg{width:12px;height:12px} .statusbar .accent{color:var(--accent-2)} .statusbar .right{margin-left:auto;display:flex;gap:14px}
+      .statusbar .build-progress{width:80px;height:3px;background:var(--bg-3);border-radius:2px;overflow:hidden;display:none} .statusbar .build-progress .bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--purple));width:0%;transition:width .3s; animation:buildAnim 1.2s infinite}
+      @keyframes buildAnim{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+      /* Toast */
+      .toast-host{position:fixed;right:16px;bottom:32px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+      .toast{min-width:240px;max-width:360px;padding:10px 12px;background:var(--bg-2);color:var(--text);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;box-shadow:var(--shadow);font-size:12px;animation:slideIn .18s ease;backdrop-filter:blur(8px)}
+      .toast.error{border-left-color:var(--red)} .toast.ok{border-left-color:var(--green)} .toast.warn{border-left-color:var(--yellow)} @keyframes slideIn{from{transform:translateY(6px);opacity:0}to{transform:none;opacity:1}}
+      /* Spinner */
+      .spinner{width:12px;height:12px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block} @keyframes spin{to{transform:rotate(360deg)}}
+      /* Context menu */
+      #ctx-menu{position:fixed;z-index:10000;min-width:240px;padding:6px;background:var(--bg-2);border:1px solid var(--border-2);border-radius:10px;box-shadow:var(--shadow);font-family:var(--sans);font-size:12px;color:var(--text);animation:ctxIn .08s ease-out;backdrop-filter:blur(12px)}
+      @keyframes ctxIn{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:none}} #ctx-menu ul{list-style:none;margin:0;padding:0} #ctx-menu li.ctx-item{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;cursor:pointer;user-select:none;outline:none} #ctx-menu li.ctx-item:hover,#ctx-menu li.ctx-item:focus{background:var(--bg-3)} #ctx-menu li.ctx-item.disabled{color:var(--text-mute);cursor:not-allowed;opacity:.55} #ctx-menu li.ctx-item.danger{color:#ff8b8b} #ctx-menu li.ctx-item.danger:hover{background:rgba(248,81,73,.12)} #ctx-menu li.ctx-item .ctx-ico{width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;color:var(--accent-2);flex:0 0 16px} #ctx-menu li.ctx-item .ctx-ico svg{width:14px;height:14px} #ctx-menu li.ctx-item .ctx-text{flex:1} #ctx-menu li.ctx-item .ctx-sc{font-family:var(--mono);font-size:10px;color:var(--text-mute);background:var(--bg-1);padding:1px 6px;border-radius:4px;border:1px solid var(--border)} #ctx-menu li.ctx-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-mute);padding:6px 8px 4px;cursor:default} #ctx-menu li.ctx-sep{height:1px;background:var(--border);margin:4px}
+      /* DevTools banner */
+      #dt-warning{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:9998;display:flex;align-items:center;gap:10px;background:linear-gradient(180deg,#2d1a1a 0%,#1d1116 100%);border:1px solid #5b1f1f;border-left:3px solid var(--red);color:#ffd7d7;padding:8px 12px 8px 10px;border-radius:10px;box-shadow:var(--shadow);font-size:12px;max-width:90vw;animation:ctxIn .15s ease} #dt-warning svg{width:16px;height:16px;color:var(--red);flex:0 0 16px} #dt-warning b{color:#fff} #dt-warning button{background:transparent;color:#ffd7d7;border:1px solid #5b1f1f;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;margin-left:4px} #dt-warning button:hover{background:rgba(248,81,73,.15)}
+      .no-select{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}
+      @media (max-width: 900px){ .app{grid-template-columns:1fr;grid-template-rows:44px 28px 1fr 22px} .sidebar{display:none} .workarea{grid-column:1;grid-template-columns:1fr;grid-template-rows:1fr 8px 1fr} .right-pane{border-left:0;border-top:1px solid var(--border)} .gutter::after{left:0;right:0;top:3px;height:2px;width:auto} .menu-bar{display:none} .crumbs{display:none} }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <!-- Sidebar -->
+      <nav class="sidebar no-select" aria-label="Activity Bar">
+        <div class="side-icon active" data-tip="Explorer" title="Explorer (Ctrl+Shift+E)">📁</div>
+        <div class="side-icon" data-tip="Search" title="Search (Ctrl+Shift+F)">🔍</div>
+        <div class="side-icon" data-tip="Source Control" title="Source Control">🌿</div>
+        <div class="side-icon" data-tip="Run" title="Run and Debug">▶️</div>
+        <div class="side-icon" data-tip="Extensions" title="Extensions">🧩</div>
+        <div class="spacer"></div>
+        <div class="side-icon" data-tip="Open File" title="Open File (Ctrl+O)" id="sideOpenFile">📂</div>
+        <div class="side-icon" data-tip="Download" title="Download File (Ctrl+S)" id="sideDownload">💾</div>
+        <div class="side-icon settings" data-tip="Settings" title="Settings">⚙️</div>
+      </nav>
 
-  <aside class="explorer no-select" id="explorer">
-    <div class="explorer-head">
-      <span>Explorer</span>
-      <div class="explorer-actions">
-        <button id="newFileBtn" title="New File"><i data-lucide="file-plus" style="width:14px;height:14px"></i></button>
-        <button id="newFolderBtn" title="New Folder (coming soon)" style="opacity:0.5" disabled><i data-lucide="folder-plus" style="width:14px;height:14px"></i></button>
-        <button id="refreshExplorerBtn" title="Refresh"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i></button>
-      </div>
-    </div>
-    <div class="file-tree" id="fileTree"></div>
-    <div style="padding:8px 12px;border-top:1px solid var(--border);font-size:11px;color:var(--text-mute)">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><i data-lucide="git-branch" style="width:12px;height:12px"></i> <span>main</span> <span style="margin-left:auto">3 changes</span></div>
-      <div style="display:flex;gap:8px">
-        <span style="background:var(--bg-3);padding:2px 6px;border-radius:4px;border:1px solid var(--border)">📁 src</span>
-        <span style="background:var(--bg-3);padding:2px 6px;border-radius:4px;border:1px solid var(--border)">📄 main.cpp</span>
-      </div>
-    </div>
-  </aside>
-
-  <header class="topbar no-select">
-    <div class="brand">
-      <img class="logo-img" src="/logo.png" alt="ide.ankb" width="28" height="28" loading="eager"/>
-      <span class="brand-text">ide.ankb</span>
-    </div>
-    <div class="command-bar">
-      <div class="command-bar-wrap">
-        <i data-lucide="search" style="width:14px;height:14px;position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-mute)"></i>
-        <input class="command-input" id="commandBarInput" placeholder="⌘ Search commands... (Ctrl+Shift+P)" readonly />
-      </div>
-    </div>
-    <div class="topbar-right" style="display:flex;align-items:center;gap:8px;margin-left:auto">
-      <div class="select-wrap" title="C++ standard (descending 23→11)">
-        <select id="cppVersion">
-          <option value="23" selected>C++23</option>
-          <option value="20">C++20</option>
-          <option value="17">C++17</option>
-          <option value="14">C++14</option>
-          <option value="11">C++11</option>
-        </select>
-      </div>
-      <div class="select-wrap" title="Theme">
-        <select id="themeSelect">
-          <option value="ide-dark" selected>Dark+</option>
-          <option value="vs-dark">VS Dark</option>
-          <option value="github-dark">GitHub Dark</option>
-          <option value="github-light">Light (coming soon)</option>
-          <option value="dracula">Dracula</option>
-          <option value="nord">Nord</option>
-          <option value="tokyo">Tokyo Night</option>
-        </select>
-      </div>
-      <div class="badge offline" id="connBadge">
-        <span class="dot" id="netDot"></span>
-        <span id="netLabel">Offline</span>
-        <span class="tooltip" id="connTooltip">Checking...</span>
-      </div>
-      <button class="icon-btn" id="openFileBtn" title="Open file (Ctrl+O)"><i data-lucide="folder-open"></i></button>
-      <button class="icon-btn" id="downloadBtn" title="Download (Ctrl+S)"><i data-lucide="download"></i></button>
-      <button class="icon-btn" id="settingsBtn" title="Settings (Ctrl+,)"><i data-lucide="settings-2"></i></button>
-      <button class="run-btn" id="runBtn" title="Run (F9)"><i data-lucide="play" style="width:12px;height:12px"></i> <span id="runLabel">Run</span> <span class="key">F9</span></button>
-    </div>
-  </header>
-
-  <div class="tabbar no-select" id="tabBar" role="tablist"></div>
-
-  <main class="workarea">
-    <section class="editor-pane" aria-label="Code editor">
-      <div class="editor-host" id="editor"></div>
-      <div class="welcome" id="welcomeScreen" style="display:none">
-        <h1>ide.ankb</h1>
-        <p>Fast, dark, Cursor-lite C++ IDE with Judge0 CE default</p>
-        <div class="welcome-actions">
-          <div class="welcome-btn" data-action="new-file"><div class="icon">📄</div><div class="title">New File</div><div class="desc">Create empty file</div></div>
-          <div class="welcome-btn" data-action="open-file"><div class="icon">📂</div><div class="title">Open File</div><div class="desc">Open from disk</div></div>
-          <div class="welcome-btn" data-action="examples"><div class="icon">💡</div><div class="title">Examples</div><div class="desc">Competitive template</div></div>
-          <div class="welcome-btn" data-action="recent"><div class="icon">🕓</div><div class="title">Recent</div><div class="desc">Restore last session</div></div>
+      <!-- Top bar -->
+      <header class="topbar no-select">
+        <div class="brand">
+          <img class="logo-img" src="/logo.png" alt="ide.ankb" width="28" height="28" loading="eager" onerror="this.src='https://i.ibb.co/Gfg90tSr/ide-ankb.jpg'" />
+          <span class="brand-text">ide.ankb</span>
         </div>
-        <div style="margin-top:24px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
-          <span style="background:var(--bg-2);border:1px solid var(--border);padding:4px 10px;border-radius:20px;font-size:11px">C++23</span>
-          <span style="background:var(--bg-2);border:1px solid var(--border);padding:4px 10px;border-radius:20px;font-size:11px">Judge0</span>
-          <span style="background:var(--bg-2);border:1px solid var(--border);padding:4px 10px;border-radius:20px;font-size:11px">Monaco</span>
-          <span style="background:var(--bg-2);border:1px solid var(--border);padding:4px 10px;border-radius:20px;font-size:11px">Discord RPC</span>
+        <div class="menu-bar">
+          <div class="menu-item" id="menuFile">File</div>
+          <div class="menu-item" id="menuEdit">Edit</div>
+          <div class="menu-item" id="menuView">View</div>
+          <div class="menu-item" id="menuRun">Run</div>
+          <div class="menu-item" id="menuHelp">Help</div>
+        </div>
+        <div class="crumbs" aria-hidden="true">
+          <span>workspace</span><span class="sep">/</span>
+          <span class="file" id="fileName">main.cpp</span>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="select-wrap" title="Choose C++ standard">
+          <select id="cppVersion">
+            <option value="23" selected>C++23</option>
+            <option value="20">C++20</option>
+            <option value="17">C++17</option>
+            <option value="14">C++14</option>
+            <option value="11">C++11</option>
+          </select>
+        </div>
+
+        <div class="select-wrap" title="Choose theme">
+          <select id="themeSelect">
+            <option value="ide-dark" selected>Dark+</option>
+            <option value="vs-dark">VS Dark</option>
+            <option value="hc-black">High Contrast</option>
+            <option value="github-dark">GitHub Dark</option>
+          </select>
+        </div>
+
+        <div class="badge offline" id="connBadge" title="Checking connection...">
+          <span class="dot" id="netDot"></span>
+          <span id="netLabel">Offline</span>
+          <span class="tooltip" id="connTooltip">Checking backend...&#10;Mode: unknown&#10;Click to retry</span>
+        </div>
+
+        <button class="icon-btn" id="openFileBtn" title="Open file (Ctrl+O)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </button>
+        <button class="icon-btn" id="downloadBtn" title="Download file (Ctrl+S)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+        <button class="icon-btn" id="formatBtn" title="Format (Shift+Alt+F)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h7"/></svg>
+        </button>
+        <button class="icon-btn" id="resetBtn" title="Reset to template">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+        </button>
+        <button class="run-btn" id="runBtn" title="Run (F9)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8V4z"/></svg>
+          <span id="runLabel">Run</span>
+          <span class="key">F9</span>
+        </button>
+      </header>
+
+      <!-- Tabs -->
+      <div class="tabbar no-select" role="tablist">
+        <div class="tab" role="tab">
+          <span class="lang-dot"></span>
+          <span id="tabFile">main.cpp</span>
+          <span class="close" id="closeTab" title="Discard">×</span>
+        </div>
+        <div class="tab-actions">
+          <span class="chip" id="langChip">C++23</span>
+          <span class="chip" id="autoSaveChip" title="Auto Save enabled">Auto Save ✓</span>
         </div>
       </div>
-    </section>
-    <div class="gutter" id="gutter" role="separator"></div>
-    <aside class="right-pane" aria-label="Input and Output">
-      <div class="pane-head">
-        <span class="pane-title">Input (stdin)</span>
-        <span class="actions">
-          <button class="icon-btn" id="clearStdinBtn" title="Clear" style="width:22px;height:22px"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button>
+
+      <!-- Work area -->
+      <main class="workarea">
+        <section class="editor-pane" aria-label="Code editor">
+          <div class="editor-host" id="editor"></div>
+        </section>
+        <div class="gutter" id="gutter" role="separator" aria-orientation="vertical"></div>
+        <aside class="right-pane" aria-label="Input and Output">
+          <div class="pane-head">
+            <span class="pane-title">Input (stdin)</span>
+            <span class="actions">
+              <button class="icon-btn" id="clearStdinBtn" title="Clear">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6 18 20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              </button>
+            </span>
+          </div>
+          <div class="pane-body">
+            <textarea id="stdin" spellcheck="false" placeholder="5&#10;1 2 3 4 5"></textarea>
+          </div>
+          <div class="pane-head" id="testCasesHead">
+            <span class="pane-title">🧪 Test Cases</span>
+            <span class="actions">
+              <button class="icon-btn" id="addTestCaseBtn" title="Add test case" style="width:auto;padding:2px 6px;font-size:10px">+ Add</button>
+              <button class="icon-btn" id="runAllTestsBtn" title="Run all tests" style="width:auto;padding:2px 6px;font-size:10px;background:#238636;color:#fff">Run All</button>
+              <button class="icon-btn" id="toggleTestCasesBtn" title="Hide/Show" style="width:22px;height:22px">👁</button>
+            </span>
+          </div>
+          <div class="pane-body" id="testCasesBody" style="overflow:auto">
+            <div id="testCasesList" style="padding:4px"></div>
+            <div style="padding:8px;text-align:center">
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer;justify-content:center">
+                <input type="checkbox" id="enableTestCases" /> Enable Test Cases (user consent)
+              </label>
+              <div style="font-size:10px;color:var(--text-mute);margin-top:4px">Run all inputs vs expected</div>
+            </div>
+          </div>
+          <div class="pane-head">
+            <span class="pane-title">Output</span>
+            <span class="actions">
+              <span class="chip" id="timeChip">— ms</span>
+              <button class="icon-btn" id="clearOutBtn" title="Clear output">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6 18 20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              </button>
+            </span>
+          </div>
+          <div class="pane-body">
+            <div class="output" id="output"><div class="empty">// Run your code to see the output here</div></div>
+          </div>
+        </aside>
+      </main>
+
+      <!-- Status bar -->
+      <footer class="statusbar no-select">
+        <span class="seg accent">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
+          <span id="statusLang">C++23</span>
         </span>
-      </div>
-      <div class="pane-body"><textarea id="stdin" spellcheck="false" placeholder="5&#10;1 2 3 4 5"></textarea></div>
-      <div class="pane-head">
-        <span class="pane-title">Output</span>
-        <span class="actions">
-          <span class="chip" id="timeChip">— ms</span>
-          <span class="chip" id="memChip" style="display:none">— MB</span>
-          <button class="icon-btn" id="clearOutBtn" title="Clear output" style="width:22px;height:22px"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button>
-        </span>
-      </div>
-      <div class="pane-body"><div class="output" id="output"><div class="empty">// Run your code to see output here</div></div></div>
-    </aside>
-  </main>
-
-  <footer class="statusbar no-select">
-    <span class="seg"><i data-lucide="git-branch" style="width:12px;height:12px"></i> <span id="gitBranch">main</span> <span id="gitChanges" style="background:var(--bg-3);padding:1px 5px;border-radius:4px;border:1px solid var(--border);margin-left:4px">3 changes</span></span>
-    <span class="seg" id="statusCursor">Ln 1, Col 1</span>
-    <span class="seg"><span id="statusEncoding">UTF-8</span> <span style="margin-left:6px">LF</span> <span style="margin-left:6px">Spaces:4</span></span>
-    <span class="seg accent" id="statusLang">C++23</span>
-    <div class="statusbar build-progress" id="buildProgress"><div class="bar" id="buildBar"></div></div>
-    <div class="right">
-      <span class="seg" id="statusBackend">Mode: Judge0</span>
-      <span class="seg" id="statusMsg">Ready</span>
-      <span class="seg" id="statusTime">— ms</span>
+        <span class="seg" id="statusCursor">Ln 1, Col 1</span>
+        <span class="seg" id="statusEncoding">UTF-8</span>
+        <span class="seg" id="statusSpaces">Spaces: 4</span>
+        <div class="statusbar build-progress" id="buildProgress"><div class="bar" id="buildBar"></div></div>
+        <div class="right">
+          <span class="seg" id="statusBackend" title="Backend mode">Mode: —</span>
+          <span class="seg" id="statusMsg">Ready</span>
+          <span class="seg" id="statusTime">— ms</span>
+        </div>
+      </footer>
     </div>
-  </footer>
-</div>
 
-<!-- Command Palette -->
-<div class="modal-overlay" id="commandPaletteOverlay">
-  <div class="modal command-palette">
-    <div class="modal-head">
-      <i data-lucide="command" style="width:16px;height:16px;color:var(--text-mute)"></i>
-      <input id="commandPaletteInput" placeholder="Type a command or search... (e.g., Run Code, Change Theme)" autofocus />
-    </div>
-    <div class="modal-body" id="commandPaletteList"></div>
-  </div>
-</div>
+    <input type="file" id="openFileInput" accept=".cpp,.cc,.c,.h,.hpp,.txt" style="display:none" />
 
-<!-- Settings Modal -->
-<div class="modal-overlay" id="settingsOverlay">
-  <div class="modal" style="max-width:520px">
-    <div class="modal-head" style="justify-content:space-between"><span style="font-weight:700">Settings</span><button class="icon-btn" id="closeSettingsBtn"><i data-lucide="x"></i></button></div>
-    <div class="modal-body">
-      <div class="settings-grid">
-        <label>Theme</label>
-        <select id="settingsTheme"><option value="ide-dark">Dark+</option><option value="vs-dark">VS Dark</option><option value="github-dark">GitHub Dark</option><option value="dracula">Dracula</option><option value="nord">Nord</option><option value="tokyo">Tokyo Night</option></select>
-        <label>Font Family</label><select id="settingsFont"><option value="Consolas">Consolas</option><option value="Fira Code">Fira Code</option><option value="JetBrains Mono">JetBrains Mono</option></select>
-        <label>Font Size</label><input id="settingsFontSize" type="number" min="10" max="24" value="14"/>
-        <label>Tab Size</label><input id="settingsTabSize" type="number" min="2" max="8" value="4"/>
-        <label>Auto Save</label><select id="settingsAutoSave"><option value="on">On</option><option value="off">Off</option></select>
-        <label>Word Wrap</label><select id="settingsWordWrap"><option value="off">Off</option><option value="on">On</option></select>
-        <label>Minimap</label><select id="settingsMinimap"><option value="on">On</option><option value="off">Off</option></select>
-        <label>Animations</label><select id="settingsAnimations"><option value="on">On</option><option value="off">Off</option></select>
-        <label>Discord RPC</label><select id="settingsDiscord"><option value="on">On (browser + desktop)</option><option value="off">Off</option></select>
-      </div>
-      <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
-        <button class="icon-btn" id="resetSettingsBtn" style="width:auto;padding:6px 12px">Reset</button>
-        <button class="run-btn" id="saveSettingsBtn" style="height:32px">Save</button>
-      </div>
-    </div>
-  </div>
-</div>
+    <div class="toast-host" id="toastHost" aria-live="polite"></div>
 
-<input type="file" id="openFileInput" accept=".cpp,.cc,.c,.h,.hpp,.txt,.py,.java,.md" style="display:none"/>
-<div class="toast-host" id="toastHost" aria-live="polite"></div>
-
-<script src="/config.js" defer></script>
-<script src="/security.js" defer></script>
-<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
-<script src="/app.js" defer></script>
-<script>document.addEventListener('DOMContentLoaded',()=>{ try{ lucide.createIcons(); }catch(e){} });</script>
-</body>
+    <script src="/config.js" defer></script>
+    <script src="/security.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+    <script src="/app.js" defer></script>
+  </body>
 </html>
