@@ -1,36 +1,22 @@
 using System;
 using System.IO;
-using System.Net.Http;
-using System.Text;
-using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
-// Discord RPC - add via NuGet Lachee.DiscordRPC
-using Lachee.DiscordRPC;
-using Lachee.DiscordRPC.Events;
+using System.Diagnostics;
 
 namespace IdeAnkb
 {
     public partial class MainWindow : Window
     {
-        private static readonly HttpClient httpClient = new HttpClient();
         private string currentFilePath = null;
-        private DiscordRPC.DiscordRpcClient discordClient;
-        private long discordStartTimestamp;
+        private bool hasLocalGcc = false;
+        private string gccVersion = "";
 
-        // Self-host options (simplest to most complex):
-        // 1. Own Node backend (simplest, single container): BACKEND_URL=http://localhost:8080
-        //    docker-compose up -d --build (pids_limit 2048, mem 2GB)
-        // 2. Judge0 CE: JUDGE0_API_URL=http://localhost:2358
-        //    docker run -d -p 2358:2358 judge0/judge0:1.13.1 (needs postgres/redis, use docker-compose.yml judge0 service)
-        // For GitHub Actions self-host judge0 workflow, set JUDGE0_API_URL via env and fill url in UI
-        private string backendUrl = Environment.GetEnvironmentVariable("BACKEND_URL") ?? "";
-        private string judge0Url = Environment.GetEnvironmentVariable("JUDGE0_API_URL") ?? Environment.GetEnvironmentVariable("JUDGE0_URL") ?? "https://ce.judge0.com";
-        private string judge0Key = Environment.GetEnvironmentVariable("JUDGE0_API_KEY") ?? "";
-        private string judge0Host = Environment.GetEnvironmentVariable("JUDGE0_API_HOST") ?? "";
-        private string discordClientId = Environment.GetEnvironmentVariable("DISCORD_CLIENT_ID") ?? "1420000000000000000"; // Replace with your Discord App Client ID from https://discord.com/developers/applications
+        // Discord RPC - optional, set DISCORD_CLIENT_ID env var
+        private dynamic discordClient;
+        private long discordStartTimestamp;
 
         public MainWindow()
         {
@@ -38,16 +24,16 @@ namespace IdeAnkb
             CppVersionCombo.SelectionChanged += (s, e) => UpdateLangChip();
             EditorBox.SelectionChanged += (s, e) => UpdateCursor();
             UpdateLangChip();
-            var mode = !string.IsNullOrWhiteSpace(backendUrl) ? $"proxy ({backendUrl})" : $"Judge0 CE ({judge0Url})";
-            StatusMsg.Text = $"Ready - {mode}";
-            ConnLabel.Text = $"🟢 Online ({(string.IsNullOrWhiteSpace(backendUrl) ? "Judge0" : "Backend")})";
-            ConnBadge.ToolTip = $"Backend: {(!string.IsNullOrWhiteSpace(backendUrl) ? backendUrl : judge0Url)}\nMode: {(string.IsNullOrWhiteSpace(backendUrl) ? "judge0" : "proxy")}\nC++ versions: 23→11 descending\nSingle .exe self-contained, no .NET needed on other machines";
 
-            // Set default Hello world template (fix XAML MC3000 invalid '<' char by setting in code-behind, not XAML attribute)
+            // Set default Hello world template (fix XAML MC3000)
             if (string.IsNullOrWhiteSpace(EditorBox.Text))
             {
                 EditorBox.Text = "#include <bits/stdc++.h>\nusing namespace std;\n\n#define fors(i, a, b) for (int i = a; i < b; i++)\n\n#define ll long long\n\nvoid sub() {\n    ios_base::sync_with_stdio(false);\n    cin.tie(0); cout.tie(0);\n}\n\nvoid sol() {\n   cout << \"Hello world!\";\n}\n\nint main() {\n    sub();\n    sol();\n    return 0;\n}\n";
             }
+
+            // Check local compiler
+            CheckLocalCompiler();
+            try { InitDiscordRpc(); } catch { }
         }
 
         private void UpdateLangChip()
@@ -72,11 +58,136 @@ namespace IdeAnkb
             catch { }
         }
 
+        private void InitDiscordRpc()
+        {
+            try
+            {
+                // Try to load Lachee.DiscordRPC via reflection (so app works even without package)
+                var discordAssembly = AppDomain.CurrentDomain.GetAssemblies();
+                // Simple init via dynamic if available
+                var clientId = Environment.GetEnvironmentVariable("DISCORD_CLIENT_ID") ?? "1420000000000000000";
+                if (string.IsNullOrWhiteSpace(clientId) || clientId == "1420000000000000000") return;
+
+                // If Lachee.DiscordRPC not available, skip
+                try
+                {
+                    var rpcClientType = Type.GetType("Lachee.DiscordRPC.DiscordRpcClient, Lachee.DiscordRPC");
+                    if (rpcClientType == null) return;
+                    discordClient = Activator.CreateInstance(rpcClientType, clientId);
+                    var onReady = rpcClientType.GetEvent("OnReady");
+                    var initialize = rpcClientType.GetMethod("Initialize");
+                    initialize?.Invoke(discordClient, null);
+                    discordStartTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    UpdateDiscordPresence("Editing", "main.cpp - ide.ankb");
+                }
+                catch { }
+            }
+            catch { }
+        }
+
+        private void UpdateDiscordPresence(string details, string state, string largeKey = "logo", string smallKey = "")
+        {
+            try
+            {
+                if (discordClient == null) return;
+                var isInitProp = discordClient.GetType().GetProperty("IsInitialized");
+                if (isInitProp != null && !(bool)isInitProp.GetValue(discordClient)) return;
+
+                var richPresenceType = Type.GetType("Lachee.DiscordRPC.RichPresence, Lachee.DiscordRPC");
+                var assetsType = Type.GetType("Lachee.DiscordRPC.Assets, Lachee.DiscordRPC");
+                var timestampsType = Type.GetType("Lachee.DiscordRPC.Timestamps, Lachee.DiscordRPC");
+                var buttonType = Type.GetType("Lachee.DiscordRPC.Button, Lachee.DiscordRPC");
+
+                dynamic presence = Activator.CreateInstance(richPresenceType);
+                presence.Details = details;
+                presence.State = state;
+                if (timestampsType != null)
+                {
+                    dynamic ts = Activator.CreateInstance(timestampsType);
+                    ts.StartUnixMilliseconds = (ulong)(discordStartTimestamp * 1000);
+                    presence.Timestamps = ts;
+                }
+                if (assetsType != null)
+                {
+                    dynamic assets = Activator.CreateInstance(assetsType);
+                    assets.LargeImageKey = largeKey;
+                    assets.LargeImageText = "ide.ankb — C++ Online IDE";
+                    assets.SmallImageKey = smallKey;
+                    assets.SmallImageText = currentFilePath != null ? System.IO.Path.GetFileName(currentFilePath) : "main.cpp";
+                    presence.Assets = assets;
+                }
+                var setPresence = discordClient.GetType().GetMethod("SetPresence");
+                setPresence?.Invoke(discordClient, new object[] { presence });
+            }
+            catch { }
+        }
+
+        private void CheckLocalCompiler()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("g++", "--version") { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+                using var proc = Process.Start(psi);
+                proc.WaitForExit(2000);
+                var output = proc.StandardOutput.ReadToEnd();
+                hasLocalGcc = proc.ExitCode == 0 && output.ToLower().Contains("g++");
+                gccVersion = output.Split('\n')[0].Trim();
+                if (hasLocalGcc)
+                {
+                    StatusBackend.Text = $"Mode: Local g++ ({gccVersion})";
+                    ConnLabel.Text = $"🟢 Online (Local g++)";
+                    ConnBadge.ToolTip = $"Local compiler found:\n{gccVersion}\nC++ versions: 23→11 descending\nReady to compile locally, no internet needed";
+                    StatusMsg.Text = "Ready - Local g++";
+                    try { UpdateDiscordPresence("Ready — Local g++ available", "main.cpp - ide.ankb"); } catch { }
+                }
+                else
+                {
+                    StatusBackend.Text = "Mode: No compiler";
+                    ConnLabel.Text = "🔴 No g++ found";
+                    ConnBadge.ToolTip = "No local g++ compiler found!\n\nInstall MinGW-w64:\n1. winget install MSYS2.MSYS2\n2. Open MSYS2 MinGW64 terminal: pacman -S mingw-w64-x86_64-gcc\n3. Add C:\\msys64\\mingw64\\bin to PATH\n4. Restart app and run g++ --version\n\nOr install: https://www.mingw-w64.org/downloads/";
+                    StatusMsg.Text = "⚠️ No g++ — install required";
+                }
+            }
+            catch
+            {
+                hasLocalGcc = false;
+                StatusBackend.Text = "Mode: No compiler";
+                ConnLabel.Text = "🔴 No g++ found";
+                ConnBadge.ToolTip = "g++ not found in PATH\n\nInstall:\nwinget install MSYS2.MSYS2\npacman -S mingw-w64-x86_64-gcc\nAdd C:\\msys64\\mingw64\\bin to PATH";
+                StatusMsg.Text = "⚠️ Install g++ required";
+            }
+        }
+
         private async void Run_Click(object sender, RoutedEventArgs e)
         {
+            // If no local compiler, require installation
+            if (!hasLocalGcc)
+            {
+                var result = MessageBox.Show(
+                    "Local g++ compiler not found!\n\n" +
+                    "This desktop version (branch app) uses compiler on your machine only (no Judge0/Wandbox).\n\n" +
+                    "Install steps:\n" +
+                    "1. winget install MSYS2.MSYS2\n" +
+                    "2. Open MSYS2 MinGW 64-bit terminal\n" +
+                    "3. Run: pacman -S mingw-w64-x86_64-gcc\n" +
+                    "4. Add to PATH: C:\\msys64\\mingw64\\bin\n" +
+                    "5. Restart app, run g++ --version to verify\n\n" +
+                    "Or install MinGW-w64 from https://www.mingw-w64.org/downloads/\n\n" +
+                    "Do you want to open MinGW download page?",
+                    "ide.ankb — g++ not found",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    try { Process.Start(new ProcessStartInfo("https://www.mingw-w64.org/downloads/") { UseShellExecute = true }); } catch { }
+                }
+                return;
+            }
+
             var code = EditorBox.Text;
             var stdin = StdinBox.Text;
-            var cppVer = "17";
+            var cppVer = "23";
             if (CppVersionCombo.SelectedItem is ComboBoxItem sel && sel.Tag is string v) cppVer = v;
 
             if (string.IsNullOrWhiteSpace(code))
@@ -87,136 +198,105 @@ namespace IdeAnkb
 
             RunButton.IsEnabled = false;
             RunButton.Content = "⏳ Compiling...";
-            var backendDesc = !string.IsNullOrWhiteSpace(backendUrl) ? $"Backend {backendUrl}" : $"Judge0 CE {judge0Url}";
-            OutputBox.Text = $"⏳ Compiling with C++{cppVer} via {backendDesc}...\n";
-            OutputBox.Text += $"--- Code size: {code.Length} chars, stdin: {stdin.Length} chars, C++{cppVer} (descending 23→11) ---\n";
-            StatusMsg.Text = $"⏳ Compiling C++{cppVer}...";
+            RunButton.Style = (Style)FindResource("RunButtonRunning");
+            OutputBox.Text = $"⏳ Compiling with local g++ C++{cppVer} ({gccVersion})...\n";
+            OutputBox.Text += $"--- Code: {code.Length} chars, stdin: {stdin.Length} chars, C++{cppVer} descending 23→11 ---\n";
+            StatusMsg.Text = $"⏳ Compiling C++{cppVer} (local g++)...";
             TimeChip.Text = "— ms";
-            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var sw = Stopwatch.StartNew();
+            try { UpdateDiscordPresence($"Compiling C++{cppVer} (local g++)", $"{System.IO.Path.GetFileName(currentFilePath ?? "main.cpp")} - ide.ankb", "logo", "running"); } catch { }
 
             try
             {
-                Judge0Result result;
-                // 0. Try local g++ if available on machine (easiest for app version, per user request: xài compiler đang có trên máy cho dễ)
-                if (hasLocalGcc)
-                {
-                    OutputBox.Text += $"Trying local g++ compiler (g++ {cppVer}) ...\n";
-                    try { UpdateDiscordPresence($"Compiling C++{cppVer} (local g++)", $"{System.IO.Path.GetFileName(currentFilePath ?? "main.cpp")} - ide.ankb", "logo", "running"); } catch {}
-                    result = await RunWithLocalGcc(code, stdin, cppVer);
-                    // If local fails with not found, fallback to backend/judge0
-                    if (!result.Success && result.Stage == "error" && result.Stderr.Contains("Local g++ failed"))
-                    {
-                        OutputBox.Text += $"Local g++ not available ({result.Stderr.Substring(0, Math.Min(200, result.Stderr.Length))}) — trying backend/Judge0...\n";
-                        hasLocalGcc = false;
-                        // fall through to backend/judge0
-                        result = null;
-                    }
-                }
-                else result = null;
-
-                if (result == null)
-                {
-                    // 1. Try own backend first if BACKEND_URL set (simplest self-host: single container, no postgres/redis)
-                    if (!string.IsNullOrWhiteSpace(backendUrl))
-                    {
-                        OutputBox.Text += $"Trying backend proxy {backendUrl}/api/run ...\n";
-                        try { UpdateDiscordPresence($"Compiling via backend", $"C++{cppVer} - {backendUrl}", "logo", "running"); } catch {}
-                        result = await RunWithBackend(code, stdin, cppVer);
-                        // If backend returns 503/crun, fallback to Judge0
-                        if (!result.Success && (result.Stderr?.Contains("crun") == true || result.Stderr?.Contains("Resource temporarily unavailable") == true || result.Stage == "error"))
-                        {
-                            OutputBox.Text += $"Backend busy ({result.Stderr.Substring(0, Math.Min(200, result.Stderr.Length))}) — falling back to Judge0...\n";
-                            var fallback = await RunWithJudge0(code, stdin, cppVer);
-                            if (fallback.Success || fallback.Stage == "compile") result = fallback;
-                        }
-                    }
-                    else
-                    {
-                        try { UpdateDiscordPresence($"Compiling via Judge0 CE", $"C++{cppVer} - {judge0Url}", "logo", "running"); } catch {}
-                        result = await RunWithJudge0(code, stdin, cppVer);
-                    }
-                }
+                var compileResult = await RunWithLocalGcc(code, stdin, cppVer);
                 sw.Stop();
                 var elapsed = sw.ElapsedMilliseconds;
 
-                // Detailed error display (always show what went wrong)
-                if (!result.Success)
+                if (!compileResult.Success)
                 {
-                    if (result.Stage == "compile")
+                    if (compileResult.Stage == "compile")
                     {
-                        OutputBox.Text = $"❌ Compile Error (C++{cppVer} via {result.Mode})\n";
+                        OutputBox.Text = $"❌ Compile Error (C++{cppVer} via local g++ {gccVersion})\n";
                         OutputBox.Text += $"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-                        OutputBox.Text += $"Compiler: {result.Compiler ?? "Judge0 GCC"}\n";
-                        OutputBox.Text += $"Exit: {result.ExitCode}\n";
+                        OutputBox.Text += $"Compiler: g++ {cppVer} ({gccVersion})\n";
+                        OutputBox.Text += $"Exit: {compileResult.ExitCode}\n";
                         OutputBox.Text += $"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-                        OutputBox.Text += $"{result.CompileError}\n";
-                        if (!string.IsNullOrWhiteSpace(result.Stderr))
-                        {
-                            OutputBox.Text += $"\n[stderr]\n{result.Stderr}\n";
-                        }
-                        OutputBox.Text += $"\n💡 Fix: Check line numbers above, missing semicolon, undefined reference, etc.\n";
-                        OutputBox.Text += $"If error is 'Resource temporarily unavailable', retry or deploy own Judge0:\n";
-                        OutputBox.Text += $"docker run -d -p 2358:2358 judge0/judge0:1.13.1\n";
-                        OutputBox.Text += $"Then set JUDGE0_API_URL=http://localhost:2358\n";
+                        OutputBox.Text += $"{compileResult.CompileError}\n";
+                        if (!string.IsNullOrWhiteSpace(compileResult.Stderr))
+                            OutputBox.Text += $"\n[stderr]\n{compileResult.Stderr}\n";
+                        OutputBox.Text += $"\n💡 Fix: Check line {ExtractLineNumber(compileResult.CompileError)}, missing ';', undefined reference, etc.\n";
                         StatusMsg.Text = "❌ Compile Error";
+                        try { UpdateDiscordPresence($"Compile Error C++{cppVer}", compileResult.CompileError.Split('\n')[0].Trim(), "logo", "error"); } catch { }
                     }
                     else
                     {
-                        OutputBox.Text = $"💥 Runtime Error / API Error (Mode: {result.Mode})\n";
+                        OutputBox.Text = $"💥 Runtime Error (local g++)\n";
                         OutputBox.Text += $"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-                        OutputBox.Text += $"Backend: {result.Backend}\n";
-                        OutputBox.Text += $"Stage: {result.Stage}\n";
-                        OutputBox.Text += $"Exit: {result.ExitCode}\n";
+                        OutputBox.Text += $"Stage: {compileResult.Stage}\n";
+                        OutputBox.Text += $"Exit: {compileResult.ExitCode}\n";
+                        OutputBox.Text += $"Time: {compileResult.Time}\n";
                         OutputBox.Text += $"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-                        OutputBox.Text += $"Stderr: {result.Stderr}\n";
-                        OutputBox.Text += $"Stdout: {result.Stdout}\n";
-                        OutputBox.Text += $"Compile Error: {result.CompileError}\n";
-                        OutputBox.Text += $"\nIf Judge0 returns 401/403, set JUDGE0_API_KEY or self-host Judge0.\n";
-                        OutputBox.Text += $"If 503/429, Wandbox/Judge0 overloaded — retry in 2s.\n";
+                        OutputBox.Text += $"Stderr: {compileResult.Stderr}\n";
+                        OutputBox.Text += $"Stdout: {compileResult.Stdout}\n";
+                        OutputBox.Text += $"CompileError: {compileResult.CompileError}\n";
                         StatusMsg.Text = "💥 Runtime Error";
+                        try { UpdateDiscordPresence($"Runtime Error", $"Exit {compileResult.ExitCode}", "logo", "error"); } catch { }
                     }
                 }
                 else
                 {
-                    OutputBox.Text = $"✅ Success (C++{cppVer} via {result.Mode})\n";
+                    OutputBox.Text = $"✅ Success (C++{cppVer} via local g++ {gccVersion})\n";
                     OutputBox.Text += $"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-                    OutputBox.Text += $"Time: {result.Time ?? elapsed + "ms"} | Memory: {result.Memory ?? "—"}\n";
+                    OutputBox.Text += $"Compiler: g++ C++{cppVer}\n";
+                    OutputBox.Text += $"Time: {compileResult.Time ?? elapsed + "ms"}\n";
                     OutputBox.Text += $"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-                    if (!string.IsNullOrWhiteSpace(result.Stdout))
-                        OutputBox.Text += result.Stdout;
+                    if (!string.IsNullOrWhiteSpace(compileResult.Stdout))
+                        OutputBox.Text += compileResult.Stdout;
                     else
                         OutputBox.Text += "// (no stdout)\n";
-                    if (!string.IsNullOrWhiteSpace(result.Stderr))
-                        OutputBox.Text += $"\n[stderr]\n{result.Stderr}\n";
-                    OutputBox.Text += $"\n✓ Completed in {elapsed} ms [{result.Mode}]";
+                    if (!string.IsNullOrWhiteSpace(compileResult.Stderr))
+                        OutputBox.Text += $"\n[stderr]\n{compileResult.Stderr}\n";
+                    OutputBox.Text += $"\n✓ Completed in {elapsed} ms [local-g++]";
                     StatusMsg.Text = "✔ Success";
+                    try { UpdateDiscordPresence($"Running Success C++{cppVer}", $"Output: {compileResult.Stdout?.Length ?? 0} chars", "logo", "success"); } catch { }
                 }
 
                 TimeChip.Text = $"{elapsed} ms";
                 StatusTime.Text = $"{elapsed} ms";
-                StatusBackend.Text = $"Mode: {result.Mode}";
+                StatusBackend.Text = $"Mode: Local g++ {gccVersion}";
+                RunButton.Content = compileResult.Success ? "✔ Success" : "❌ Failed";
+                await Task.Delay(2000);
+                RunButton.Content = "▶ Run (F5)";
             }
             catch (Exception ex)
             {
-                OutputBox.Text = $"❌ Compiler service unavailable.\n";
+                OutputBox.Text = $"❌ Local compiler error\n";
                 OutputBox.Text += $"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-                OutputBox.Text += $"Backend: Judge0 CE ({judge0Url})\n";
                 OutputBox.Text += $"Error: {ex.Message}\n";
-                OutputBox.Text += $"Stack: {ex}\n";
+                OutputBox.Text += $"{ex}\n";
                 OutputBox.Text += $"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-                OutputBox.Text += $"Fix:\n";
-                OutputBox.Text += $"1. Check internet\n";
-                OutputBox.Text += $"2. Self-host Judge0: docker run -d -p 2358:2358 judge0/judge0:1.13.1\n";
-                OutputBox.Text += $"3. Set env JUDGE0_API_URL=http://localhost:2358\n";
-                OutputBox.Text += $"4. Or use web version ide.ankb with backend fallback\n";
-                StatusMsg.Text = "🔴 Offline";
-                ConnLabel.Text = "🔴 Backend unavailable";
+                OutputBox.Text += $"Fix: Ensure g++ is in PATH\n";
+                OutputBox.Text += $"winget install MSYS2.MSYS2\n";
+                OutputBox.Text += $"pacman -S mingw-w64-x86_64-gcc\n";
+                StatusMsg.Text = "❌ Error";
             }
             finally
             {
                 RunButton.IsEnabled = true;
                 RunButton.Content = "▶ Run (F5)";
+                RunButton.Style = null;
             }
+        }
+
+        private string ExtractLineNumber(string error)
+        {
+            try
+            {
+                var m = System.Text.RegularExpressions.Regex.Match(error, @"(?:main\.cpp|:|line )(\d+):?(\d+)?");
+                if (m.Success) return $"line {m.Groups[1].Value}";
+            }
+            catch { }
+            return "";
         }
 
         public class Judge0Result
@@ -227,280 +307,11 @@ namespace IdeAnkb
             public string Stderr { get; set; } = "";
             public string CompileError { get; set; } = "";
             public int ExitCode { get; set; }
-            public string Mode { get; set; } = "judge0";
-            public string Backend { get; set; } = "";
+            public string Mode { get; set; } = "local-g++";
+            public string Backend { get; set; } = "local";
             public string Compiler { get; set; } = "";
             public string Time { get; set; } = "";
             public string Memory { get; set; } = "";
-        }
-
-        private async Task<Judge0Result> RunWithJudge0(string code, string stdin, string cppVersion)
-        {
-            // Map C++ version to Judge0 language_id
-            // Judge0: 54 = C++17 GCC 9.2.0, 52 = C++14, 53 = C++20? Actually 54 is C++17, 76 is C++20 clang, but use 54 for all and pass compiler option via code? Judge0 doesn't support std flag via API, so we embed #pragma or just use default
-            // For simplicity, use 54 for all versions, but we can try to map:
-            int langId = cppVersion switch
-            {
-                "11" => 52, // C++14 used as fallback
-                "14" => 52,
-                "17" => 54,
-                "20" => 54, // C++17 GCC also handles C++20 mostly, or 76 for clang20
-                "23" => 54,
-                _ => 54
-            };
-
-            var url = $"{judge0Url.TrimEnd('/')}/submissions?base64_encoded=false&wait=true";
-            var payload = new
-            {
-                source_code = code,
-                language_id = langId,
-                stdin = stdin ?? "",
-                redirect_stderr_to_stdout = false
-            };
-
-            var json = JsonSerializer.Serialize(payload);
-            var request = new HttpRequestMessage(HttpMethod.Post, url);
-            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-            if (!string.IsNullOrWhiteSpace(judge0Key))
-            {
-                request.Headers.Add("X-RapidAPI-Key", judge0Key);
-                if (!string.IsNullOrWhiteSpace(judge0Host))
-                    request.Headers.Add("X-RapidAPI-Host", judge0Host);
-            }
-
-            var response = await httpClient.SendAsync(request);
-            var text = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return new Judge0Result
-                {
-                    Success = false,
-                    Stage = "error",
-                    Stderr = $"Judge0 API error {response.StatusCode}: {text.Substring(0, Math.Min(2000, text.Length))}\n\nBackend: {judge0Url}\nFix: Check JUDGE0_API_URL, if using RapidAPI set JUDGE0_API_KEY and JUDGE0_API_HOST",
-                    CompileError = text,
-                    ExitCode = (int)response.StatusCode,
-                    Mode = "judge0",
-                    Backend = judge0Url
-                };
-            }
-
-            try
-            {
-                var doc = JsonDocument.Parse(text);
-                var root = doc.RootElement;
-                var stdout = root.TryGetProperty("stdout", out var s) ? s.GetString() ?? "" : "";
-                var stderr = root.TryGetProperty("stderr", out var se) ? se.GetString() ?? "" : "";
-                var compileOutput = root.TryGetProperty("compile_output", out var co) ? co.GetString() ?? "" : "";
-                var statusId = 0;
-                var statusDesc = "";
-                if (root.TryGetProperty("status", out var statusEl))
-                {
-                    if (statusEl.TryGetProperty("id", out var idEl)) statusId = idEl.GetInt32();
-                    if (statusEl.TryGetProperty("description", out var descEl)) statusDesc = descEl.GetString() ?? "";
-                }
-                var time = root.TryGetProperty("time", out var tEl) ? tEl.GetString() ?? "" : "";
-                var memory = root.TryGetProperty("memory", out var mEl) ? mEl.GetInt32().ToString() : "";
-
-                if (statusId == 6 || !string.IsNullOrWhiteSpace(compileOutput))
-                {
-                    return new Judge0Result
-                    {
-                        Success = false,
-                        Stage = "compile",
-                        Stdout = stdout,
-                        Stderr = stderr,
-                        CompileError = compileOutput,
-                        ExitCode = statusId,
-                        Mode = "judge0",
-                        Backend = judge0Url,
-                        Compiler = $"C++{cppVersion} (lang {langId}) - {statusDesc}",
-                        Time = time,
-                        Memory = memory
-                    };
-                }
-
-                bool isSuccess = statusId == 3;
-                bool isTLE = statusId == 5;
-
-                return new Judge0Result
-                {
-                    Success = isSuccess,
-                    Stage = isTLE ? "error" : "run",
-                    Stdout = stdout,
-                    Stderr = stderr,
-                    CompileError = "",
-                    ExitCode = isSuccess ? 0 : statusId,
-                    Mode = "judge0",
-                    Backend = judge0Url,
-                    Compiler = $"C++{cppVersion} - {statusDesc}",
-                    Time = time,
-                    Memory = memory
-                };
-            }
-            catch (Exception ex)
-            {
-                return new Judge0Result
-                {
-                    Success = false,
-                    Stage = "error",
-                    Stderr = $"Failed to parse Judge0 response: {ex.Message}\nRaw: {text.Substring(0, Math.Min(1000, text.Length))}",
-                    CompileError = text,
-                    ExitCode = 500,
-                    Mode = "judge0-parse-error",
-                    Backend = judge0Url
-                };
-            }
-        }
-
-        // Simplest self-host: own Node backend (backend/server.js) — single container, no postgres/redis
-        // docker-compose up -d --build ide (port 8080)
-        private async Task<Judge0Result> RunWithBackend(string code, string stdin, string cppVersion)
-        {
-            var url = $"{backendUrl.TrimEnd('/')}/api/run";
-            var payload = new { code = code, stdin = stdin ?? "", version = cppVersion, cppVersion = cppVersion };
-            var json = JsonSerializer.Serialize(payload);
-            try
-            {
-                var resp = await httpClient.PostAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
-                var text = await resp.Content.ReadAsStringAsync();
-                JsonDocument doc;
-                try { doc = JsonDocument.Parse(text); } catch { return new Judge0Result { Success = false, Stage = "error", Stderr = $"Backend non-JSON {resp.StatusCode}: {text.Substring(0, Math.Min(1000, text.Length))}", CompileError = text, ExitCode = (int)resp.StatusCode, Mode = "backend", Backend = backendUrl }; }
-                var root = doc.RootElement;
-                string GetStr(string name) => root.TryGetProperty(name, out var el) ? el.GetString() ?? "" : "";
-                int GetInt(string name) => root.TryGetProperty(name, out var el) && el.TryGetInt32(out var v) ? v : 0;
-                bool GetBool(string name) => root.TryGetProperty(name, out var el) && el.GetBoolean();
-
-                var stage = GetStr("stage");
-                if (string.IsNullOrWhiteSpace(stage)) stage = "run";
-                var stdout = GetStr("stdout");
-                var stderr = GetStr("stderr");
-                var compileErr = GetStr("compile_error");
-                var exitCode = GetInt("exit_code");
-                var success = root.TryGetProperty("success", out var succEl) ? succEl.GetBoolean() : (exitCode == 0 && stage != "compile" && stage != "error");
-                // Detailed error display
-                if (stage == "compile" || (!string.IsNullOrWhiteSpace(compileErr) && !success))
-                {
-                    return new Judge0Result
-                    {
-                        Success = false,
-                        Stage = "compile",
-                        Stdout = stdout,
-                        Stderr = stderr,
-                        CompileError = compileErr,
-                        ExitCode = exitCode,
-                        Mode = "backend",
-                        Backend = backendUrl,
-                        Compiler = $"C++{cppVersion} g++",
-                    };
-                }
-                if (!resp.IsSuccessStatusCode || stage == "error")
-                {
-                    return new Judge0Result
-                    {
-                        Success = false,
-                        Stage = "error",
-                        Stdout = stdout,
-                        Stderr = stderr + "\n" + GetStr("error") + " " + GetStr("detail"),
-                        CompileError = compileErr,
-                        ExitCode = exitCode,
-                        Mode = "backend",
-                        Backend = backendUrl
-                    };
-                }
-                return new Judge0Result
-                {
-                    Success = success,
-                    Stage = stage,
-                    Stdout = stdout,
-                    Stderr = stderr,
-                    CompileError = compileErr,
-                    ExitCode = exitCode,
-                    Mode = "backend",
-                    Backend = backendUrl,
-                    Time = GetStr("durationMs"),
-                };
-            }
-            catch (Exception ex)
-            {
-                return new Judge0Result
-                {
-                    Success = false,
-                    Stage = "error",
-                    Stderr = $"Backend {backendUrl} unavailable: {ex.Message}\nFix: docker-compose up -d --build ide\nThen set BACKEND_URL=http://localhost:8080",
-                    CompileError = ex.ToString(),
-                    ExitCode = 500,
-                    Mode = "backend-error",
-                    Backend = backendUrl
-                };
-            }
-        }
-
-
-        private void InitDiscordRpc()
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(discordClientId) || discordClientId == "1420000000000000000")
-                {
-                    Console.WriteLine("Discord RPC: No valid Client ID, skip. Create app at https://discord.com/developers/applications");
-                    return;
-                }
-                discordClient = new DiscordRPC.DiscordRpcClient(discordClientId);
-                discordClient.OnReady += (sender, e) => { Console.WriteLine($"Discord RPC Ready: {e.User.Username}"); };
-                discordClient.OnError += (sender, e) => { Console.WriteLine($"Discord RPC Error: {e.Code} {e.Message}"); };
-                discordClient.Initialize();
-                discordStartTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                UpdateDiscordPresence("Editing", "main.cpp - ide.ankb", "logo", "");
-            }
-            catch (Exception ex) { Console.WriteLine($"Discord RPC init failed: {ex.Message}"); }
-        }
-
-        private void UpdateDiscordPresence(string details, string state, string largeImageKey = "logo", string smallImageKey = "")
-        {
-            try
-            {
-                if (discordClient == null || !discordClient.IsInitialized) return;
-                discordClient.SetPresence(new RichPresence()
-                {
-                    Details = details,
-                    State = state,
-                    Timestamps = new Timestamps() { StartUnixMilliseconds = (ulong)(discordStartTimestamp * 1000) },
-                    Assets = new Assets()
-                    {
-                        LargeImageKey = largeImageKey,
-                        LargeImageText = "ide.ankb — C++ Online IDE",
-                        SmallImageKey = smallImageKey,
-                        SmallImageText = currentFilePath != null ? System.IO.Path.GetFileName(currentFilePath) : "main.cpp"
-                    },
-                    Buttons = new Button[]
-                    {
-                        new Button() { Label = "Open ide.ankb", Url = "https://github.com/ankbuitv/ide" }
-                    }
-                });
-            }
-            catch { }
-        }
-
-        private bool hasLocalGcc = false;
-        private void CheckLocalCompiler()
-        {
-            try
-            {
-                var psi = new System.Diagnostics.ProcessStartInfo("g++", "--version") { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
-                using var proc = System.Diagnostics.Process.Start(psi);
-                proc.WaitForExit(2000);
-                var output = proc.StandardOutput.ReadToEnd();
-                hasLocalGcc = proc.ExitCode == 0 && output.ToLower().Contains("g++");
-                if (hasLocalGcc)
-                {
-                    StatusBackend.Text = $"Mode: Local g++ + {(string.IsNullOrWhiteSpace(backendUrl) ? "Judge0" : "Backend")}";
-                    ConnLabel.Text = $"🟢 Online (Local g++ + Judge0)";
-                    ConnBadge.ToolTip = $"Local compiler: {output.Split('\n')[0]}\nBackend: {(string.IsNullOrWhiteSpace(backendUrl) ? judge0Url : backendUrl)}\nModes: local g++, Judge0 CE, backend proxy";
-                    try { UpdateDiscordPresence("Ready — Local g++ available", "main.cpp - ide.ankb"); } catch { }
-                }
-            }
-            catch { hasLocalGcc = false; }
         }
 
         private async Task<Judge0Result> RunWithLocalGcc(string code, string stdin, string cppVersion)
@@ -513,39 +324,53 @@ namespace IdeAnkb
                 var exePath = System.IO.Path.Combine(tempDir, "main.exe");
                 if (Environment.OSVersion.Platform != PlatformID.Win32NT) exePath = System.IO.Path.Combine(tempDir, "main");
                 var inPath = System.IO.Path.Combine(tempDir, "in.txt");
+
                 await File.WriteAllTextAsync(srcPath, code);
                 await File.WriteAllTextAsync(inPath, stdin ?? "");
+
                 string stdFlag = cppVersion switch { "11" => "-std=c++11", "14" => "-std=c++14", "17" => "-std=c++17", "20" => "-std=c++20", "23" => "-std=c++23", _ => "-std=c++17" };
-                var compilePsi = new System.Diagnostics.ProcessStartInfo("g++", $"{stdFlag} -O2 -pipe -o "{exePath}" "{srcPath}"") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = tempDir };
-                using var compileProc = System.Diagnostics.Process.Start(compilePsi);
+
+                var compilePsi = new ProcessStartInfo("g++", $"{stdFlag} -O2 -pipe -o \"{exePath}\" \"{srcPath}\"") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = tempDir };
+                using var compileProc = Process.Start(compilePsi);
                 var compileErr = await compileProc.StandardError.ReadToEndAsync();
                 var compileOut = await compileProc.StandardOutput.ReadToEndAsync();
                 await compileProc.WaitForExitAsync();
+
+                var combinedCompileOutput = compileErr + compileOut;
+
                 if (compileProc.ExitCode != 0)
                 {
                     try { Directory.Delete(tempDir, true); } catch { }
-                    return new Judge0Result { Success = false, Stage = "compile", Stdout = compileOut, Stderr = compileErr, CompileError = compileErr, ExitCode = compileProc.ExitCode, Mode = "local-g++", Backend = "local", Compiler = $"g++ {stdFlag}" };
+                    return new Judge0Result { Success = false, Stage = "compile", Stdout = compileOut, Stderr = compileErr, CompileError = combinedCompileOutput, ExitCode = compileProc.ExitCode, Mode = "local-g++", Backend = "local", Compiler = $"g++ {stdFlag} ({gccVersion})" };
                 }
-                var runPsi = new System.Diagnostics.ProcessStartInfo() { FileName = exePath, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = tempDir };
-                using var runProc = new System.Diagnostics.Process() { StartInfo = runPsi };
+
+                var runPsi = new ProcessStartInfo() { FileName = exePath, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = tempDir };
+                using var runProc = new Process() { StartInfo = runPsi };
                 runProc.Start();
                 if (!string.IsNullOrEmpty(stdin)) await runProc.StandardInput.WriteAsync(stdin);
                 runProc.StandardInput.Close();
+
                 var cts = new System.Threading.CancellationTokenSource(2000);
                 var stdoutTask = runProc.StandardOutput.ReadToEndAsync();
                 var stderrTask = runProc.StandardError.ReadToEndAsync();
-                try { await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(TimeSpan.FromSeconds(2), cts.Token); } catch { try { runProc.Kill(); } catch { } return new Judge0Result { Success = false, Stage = "run", Stdout = await stdoutTask, Stderr = "Timed out after 2s", CompileError = "", ExitCode = 124, Mode = "local-g++", Backend = "local", Compiler = $"g++ {stdFlag}" }; }
+                try { await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(TimeSpan.FromSeconds(2), cts.Token); }
+                catch
+                {
+                    try { runProc.Kill(); } catch { }
+                    return new Judge0Result { Success = false, Stage = "run", Stdout = await stdoutTask, Stderr = "Timed out after 2s", CompileError = "", ExitCode = 124, Mode = "local-g++", Backend = "local", Compiler = $"g++ {stdFlag}" };
+                }
                 await runProc.WaitForExitAsync();
-                var stdoutRes = await stdoutTask; var stderrRes = await stderrTask;
+                var stdoutRes = await stdoutTask;
+                var stderrRes = await stderrTask;
                 try { Directory.Delete(tempDir, true); } catch { }
-                return new Judge0Result { Success = runProc.ExitCode == 0, Stage = "run", Stdout = stdoutRes, Stderr = stderrRes, CompileError = "", ExitCode = runProc.ExitCode, Mode = "local-g++", Backend = "local", Compiler = $"g++ {stdFlag}", Time = "", Memory = "" };
+
+                return new Judge0Result { Success = runProc.ExitCode == 0, Stage = "run", Stdout = stdoutRes, Stderr = stderrRes, CompileError = "", ExitCode = runProc.ExitCode, Mode = "local-g++", Backend = "local", Compiler = $"g++ {stdFlag} ({gccVersion})", Time = "", Memory = "" };
             }
             catch (Exception ex)
             {
-                return new Judge0Result { Success = false, Stage = "error", Stderr = $"Local g++ failed: {ex.Message}\nMake sure MinGW g++ is in PATH (C:\\MinGW\\bin or C:\\msys64\\mingw64\\bin)", CompileError = ex.ToString(), ExitCode = 500, Mode = "local-g++-error", Backend = "local" };
+                return new Judge0Result { Success = false, Stage = "error", Stderr = $"Local g++ failed: {ex.Message}\nMake sure MinGW g++ is installed and in PATH (C:\\MinGW\\bin or C:\\msys64\\mingw64\\bin)\n\nInstall: winget install MSYS2.MSYS2\nThen: pacman -S mingw-w64-x86_64-gcc\nAdd C:\\msys64\\mingw64\\bin to PATH", CompileError = ex.ToString(), ExitCode = 500, Mode = "local-g++-error", Backend = "local" };
             }
         }
-
 
         private void OpenFile_Click(object sender, RoutedEventArgs e)
         {
@@ -558,7 +383,7 @@ namespace IdeAnkb
                     EditorBox.Text = text;
                     currentFilePath = dlg.FileName;
                     TabFileName.Text = System.IO.Path.GetFileName(dlg.FileName);
-                    MessageBox.Show($"Opened {dlg.FileName}\nSize: {text.Length} chars", "ide.ankb", MessageBoxButton.OK, MessageBoxImage.Information);
+                    try { UpdateDiscordPresence($"Editing {System.IO.Path.GetFileName(dlg.FileName)}", "ide.ankb - local g++", "logo", ""); } catch { }
                 }
                 catch (Exception ex) { MessageBox.Show($"Failed to open: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error); }
             }
@@ -570,7 +395,7 @@ namespace IdeAnkb
             if (!string.IsNullOrEmpty(currentFilePath)) dlg.FileName = System.IO.Path.GetFileName(currentFilePath);
             if (dlg.ShowDialog() == true)
             {
-                try { File.WriteAllText(dlg.FileName, EditorBox.Text); MessageBox.Show($"Saved to {dlg.FileName}", "ide.ankb", MessageBoxButton.OK, MessageBoxImage.Information); currentFilePath = dlg.FileName; } 
+                try { File.WriteAllText(dlg.FileName, EditorBox.Text); currentFilePath = dlg.FileName; TabFileName.Text = System.IO.Path.GetFileName(dlg.FileName); } 
                 catch (Exception ex) { MessageBox.Show($"Failed to save: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error); }
             }
         }
@@ -587,11 +412,9 @@ namespace IdeAnkb
         private void ClearOutput_Click(object sender, RoutedEventArgs e) { OutputBox.Text = "// Run your code to see output here"; }
         private void CloseTab_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) { if (MessageBox.Show("Clear editor?", "ide.ankb", MessageBoxButton.YesNo) == MessageBoxResult.Yes) EditorBox.Clear(); }
 
-
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
             try { discordClient?.ClearPresence(); discordClient?.Deinitialize(); discordClient?.Dispose(); } catch { }
         }
-
     }
 }
