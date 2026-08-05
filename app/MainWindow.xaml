@@ -1,10 +1,11 @@
 <Window x:Class="IdeAnkb.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="ide.ankb — C++ Online IDE Desktop (Judge0 CE)" Height="900" Width="1400"
+        Title="ide.ankb — C++ Online IDE Desktop (Judge0 CE + Local g++ + Discord RPC)" Height="900" Width="1400"
         Background="#0d1117" Foreground="#c9d1d9"
         WindowStartupLocation="CenterScreen"
-        Icon="../public/logo.png">
+        Icon="../public/logo.png"
+        Closing="Window_Closing">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="44"/>
@@ -111,29 +112,7 @@
                              AcceptsReturn="True" AcceptsTab="True" 
                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                              TextWrapping="NoWrap" Padding="12"
-                             BorderThickness="0"
-                             Text="#include &lt;bits/stdc++.h&gt;
-using namespace std;
-
-#define fors(i, a, b) for (int i = a; i < b; i++)
-
-#define ll long long
-
-void sub() {
-    ios_base::sync_with_stdio(false);
-    cin.tie(0); cout.tie(0);
-}
-
-void sol() {
-   cout &lt;&lt; &quot;Hello world!&quot;;
-}
-
-int main() {
-    sub();
-    sol();
-    return 0;
-}
-"/>
+                             BorderThickness="0"/>
                     <Border Grid.Row="1" Background="#161b22" BorderBrush="#30363d" BorderThickness="0,1,0,0">
                         <Grid>
                             <Grid.RowDefinitions>

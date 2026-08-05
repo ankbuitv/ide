@@ -22,4 +22,9 @@
     </Resource>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Discord RPC for Rich Presence -->
+    <PackageReference Include="Lachee.DiscordRPC" Version="1.0.1.65" />
+  </ItemGroup>
+
 </Project>
