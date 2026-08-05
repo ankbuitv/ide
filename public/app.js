@@ -604,12 +604,33 @@ int main() {
     if(els.openFileInput) els.openFileInput.addEventListener('change',(e)=>{ const f=e.target.files[0]; if(f) openFile(f); e.target.value=''; });
 
     // File menu
-    if(els.menuFile) els.menuFile.addEventListener('click',()=>{ 
-      const choice=prompt('File: 1=Open (Ctrl+O), 2=Download (Ctrl+S), 3=Reset');
+    if(els.menuFile) els.menuFile.addEventListener('click',()=>{
+      const choice=prompt('File (working):
+1=Open (Ctrl+O)
+2=Download (Ctrl+S)
+3=Reset template
+
+For CP focus, use sidebar 📂💾');
       if(choice==='1') els.openFileInput.click();
-      else if(choice==='2') downloadFile();
-      else if(choice==='3' && confirm('Reset?')) editor.setValue(defaultTemplate);
+      else if(choice==='2'){ const name=currentFile||'main.cpp'; const blob=new Blob([files[name]||editor.getValue()],{type:'text/plain'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; a.click(); }
+      else if(choice==='3' && confirm('Reset?')){ files[currentFile]=FALLBACK_TEMPLATE; if(editor) editor.setValue(FALLBACK_TEMPLATE); saveFiles(); }
     });
+    if(els.menuEdit){
+      els.menuEdit.style.opacity='0.5';
+      els.menuEdit.title='Coming soon 🚧';
+      els.menuEdit.addEventListener('click',()=>toast('Edit — Coming soon 🚧 (Undo/Redo use Ctrl+Z/Y, Find via Monaco)','warn',3000));
+    }
+    if(els.menuView){
+      els.menuView.style.opacity='0.5';
+      els.menuView.title='Coming soon 🚧';
+      els.menuView.addEventListener('click',()=>toast('View — Coming soon 🚧 (Explorer already working)','warn',3000));
+    }
+    if(els.menuRun){ els.menuRun.addEventListener('click',()=>run()); }
+    if(els.menuHelp){
+      els.menuHelp.style.opacity='0.5';
+      els.menuHelp.title='Coming soon 🚧';
+      els.menuHelp.addEventListener('click',()=>toast('Help — github.com/ankbuitv/ide | F9=Run, Ctrl+Shift+P=Palette','warn',3000));
+    }
 
     setupGutter();
 
@@ -690,10 +711,31 @@ int main() {
       const runAllBtn=document.getElementById('runAllTestsBtn');
       if(runAllBtn) runAllBtn.addEventListener('click',()=>runAllTests());
       const toggleBtn=document.getElementById('toggleTestCasesBtn');
-      if(toggleBtn) toggleBtn.addEventListener('click',()=>{
-        const body=document.getElementById('testCasesBody');
-        if(body) body.style.display=body.style.display==='none'?'block':'none';
-      });
+      const testHead=document.getElementById('testCasesHead');
+      const testBody=document.getElementById('testCasesBody');
+      const rightPane=document.querySelector('.right-pane');
+      if(toggleBtn){
+        toggleBtn.addEventListener('click',()=>{
+          const isHidden = testBody && (testBody.style.display==='none' || getComputedStyle(testBody).display==='none');
+          if(isHidden){
+            // Show
+            if(testHead) testHead.style.display='flex';
+            if(testBody) testBody.style.display='block';
+            if(rightPane) rightPane.style.gridTemplateRows='36px 1fr 36px 160px 36px 1fr';
+            toggleBtn.textContent='👁';
+            toast('Test Cases shown','ok',800);
+          } else {
+            // Hide - fix UI error: hide both head and body and adjust grid to remove empty space
+            if(testHead) testHead.style.display='none';
+            if(testBody) testBody.style.display='none';
+            if(rightPane) rightPane.style.gridTemplateRows='36px 1fr 36px 1fr';
+            toggleBtn.textContent='🧪';
+            toast('Test Cases hidden','ok',800);
+          }
+          // Re-layout monaco
+          if(editor) setTimeout(()=>editor.layout(),100);
+        });
+      }
       const enableCb=document.getElementById('enableTestCases');
       if(enableCb){
         enableCb.checked=testCasesEnabled;

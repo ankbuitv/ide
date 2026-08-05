@@ -30,7 +30,6 @@ namespace IdeAnkb.WebView2
             CheckLocalCompiler();
             InitDiscordRpc();
             await InitWebViewAsync();
-            UpdateStatus();
         }
 
         private void CheckLocalCompiler()
@@ -211,7 +210,9 @@ namespace IdeAnkb.WebView2
                     {
                         var msg = e.TryGetWebMessageAsString();
                         Console.WriteLine($"WebView message: {msg}");
-                        StatusMsg.Text = msg;
+                        // Status message from webview
+                        try { GccStatus.Text = msg; } catch { }
+                        // StatusMsg removed - was causing CS0103
                     }
                     catch { }
                 };
