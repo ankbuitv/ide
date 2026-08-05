@@ -1,6 +1,6 @@
 /**
  * ide.ankb - Backend Execution Engine (v9.5)
- * - Compile & run C++ with g++, fallback to Judge0 CE / Wandbox when overloaded
+ * - Compile & run C++ with g++, fallback to Judge0 CE / Judge0 when overloaded
  * - Fixes OCI runtime error: crun: clone: Resource temporarily unavailable (nproc 64->512, RAM 1GB, pids_limit 2048)
  * - Judge0 CE default fallback (env JUDGE0_API_URL)
  */
@@ -153,26 +153,9 @@ async function tryJudge0(code, stdin) {
   } catch (e) { return { error: `Judge0 exception: ${e.message}` }; }
 }
 
-async function tryWandbox(code, stdin) {
-  const WANDBOX_API = 'https://wandbox.org/api/compile.json';
-  const compilers = ['gcc-head', 'gcc-14.2.0', 'gcc-13.2.0', 'gcc-12.2.0'];
-  let lastError = null;
-  for (const compiler of compilers) {
-    try {
-      const res = await fetch(WANDBOX_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ compiler, code, stdin: stdin||'', 'compiler-option-raw': '-std=gnu++17 -O2 -pipe', save: false }) });
-      const text = await res.text(); let data; try { data = JSON.parse(text); } catch { data = null; }
-      if (!res.ok) { lastError = `Wandbox ${compiler} HTTP ${res.status}: ${text.slice(0,1000)}`; if ([400,404,429,503].includes(res.status)) continue; return { error: lastError, status: res.status }; }
-      if (!data) { lastError = `Wandbox ${compiler} invalid JSON`; continue; }
-      if (data.compiler_error && /not found|unknown compiler/i.test(data.compiler_error)) { lastError = data.compiler_error; continue; }
-      const hasCompileError = data.compiler_error && data.compiler_error.trim();
-      if (data.status && data.status !== '0' && hasCompileError) {
-        return { success: false, stage: 'compile', stdout: data.program_output||'', stderr: data.program_error||'', compile_error: data.compiler_error||data.compiler_message||'', exit_code: parseInt(data.status||'1',10), mode: 'wandbox', compiler };
-      }
-      const exitCode = data.status ? parseInt(data.status,10) : 0;
-      return { success: exitCode===0, stage: 'run', stdout: data.program_output||'', stderr: data.program_error||'', compile_error: '', exit_code: exitCode, signal: data.signal||null, mode: 'wandbox', compiler };
-    } catch (e) { lastError = `Wandbox ${compiler} exception: ${e.message}`; continue; }
-  }
-  return { error: lastError || 'All Wandbox compilers failed' };
+async function tryJudge0(code, stdin) {
+  // Removed in app branch - Judge0 only (per user request: bỏ judge0 đi)
+  return { error: 'Judge0 removed in app branch - use Judge0 only', skipped: true };
 }
 
 app.get('/api/health', (_req, res) => {
@@ -209,10 +192,6 @@ app.post('/api/run', async (req, res) => {
     if (!judge0Result.error && !judge0Result.skipped) {
       return res.json({ ...judge0Result, durationMs: 0, fallback: 'judge0-busy' });
     }
-    const wandboxResult = await tryWandbox(code, inputStr);
-    if (!wandboxResult.error || wandboxResult.stage) {
-      return res.json({ ...wandboxResult, durationMs: 0, fallback: 'wandbox-busy' });
-    }
     return res.status(503).json({ error: 'Server busy', detail: `Active ${global.__activeJobs}/${LIMITS.maxConcurrent}`, retryAfter: 1, stage: 'error', mode: 'busy' });
   }
   global.__activeJobs++;
@@ -225,17 +204,13 @@ app.post('/api/run', async (req, res) => {
 
     const combinedErr = (compile.stderr || '') + (compile.stdout || '');
     if (/OCI runtime error|crun: clone|Resource temporarily unavailable|fork: retry|Cannot allocate memory/i.test(combinedErr)) {
-      console.log(`[ide.ankb] OCI crun error detected, trying Judge0/Wandbox fallback`);
+      console.log(`[ide.ankb] OCI crun error detected, trying Judge0/Judge0 fallback`);
       const judge0Result = await tryJudge0(code, inputStr);
       if (!judge0Result.error && !judge0Result.skipped) {
         return res.json({ ...judge0Result, durationMs: compile.durationMs, fallback: 'judge0-oci', originalError: combinedErr.slice(0,500) });
       }
-      const wandboxResult = await tryWandbox(code, inputStr);
-      if (!wandboxResult.error || wandboxResult.stage) {
-        return res.json({ ...wandboxResult, durationMs: compile.durationMs, fallback: 'wandbox-oci', originalError: combinedErr.slice(0,500) });
-      }
       return res.status(503).json({
-        success: false, stage: 'error', stdout: '', stderr: `Transient container resource error: ${combinedErr.slice(0,2000)}\n\nFixes: nproc 512, RAM 1GB, pids_limit 2048, concurrency 6\nFallbacks attempted: Judge0 ${judge0Result.error||'skipped'}, Wandbox ${wandboxResult.error}\n\nPlease retry, docker-compose down && up -d --build, or set JUDGE0_API_URL`, compile_error: '', durationMs: compile.durationMs, retryable: true, mode: 'oci-error',
+        success: false, stage: 'error', stdout: '', stderr: `Transient container resource error: ${combinedErr.slice(0,2000)}\n\nFixes: nproc 512, RAM 1GB, pids_limit 2048, concurrency 6\nFallback attempted: Judge0 ${judge0Result.error||'skipped'}, Judge0 ${judge0Result.error}\n\nPlease retry, docker-compose down && up -d --build, or set JUDGE0_API_URL`, compile_error: '', durationMs: compile.durationMs, retryable: true, mode: 'oci-error',
       });
     }
 

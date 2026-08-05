@@ -1,7 +1,7 @@
 /* ============================================================
  * ide.ankb — Frontend Controller (v9.5 UI/UX + Judge0 default)
  * Fixes:
- * - Judge0 CE default fallback (no backend needed)
+ * - Judge0 CE default only (Judge0 removed per app branch request)
  * - Auto Save, Download/Open file, C++ version selector, Theme switch
  * - Connection badge 🟢/🟡/🔴 with tooltip + backend mode
  * - Output colors success/warning/error, loading states
@@ -192,9 +192,9 @@ int main() {
       if(isOci){
         h.innerHTML='<div style="color:#f85149;font-weight:600;margin-bottom:6px;">⚠️ Container overloaded (crun clone EAGAIN)</div>';
         const pre=document.createElement('div'); pre.className='stderr'; pre.style.whiteSpace='pre-wrap';
-        pre.textContent=rawErr+'\n\n--- Fix applied in backend ---\n- nproc 64→512, compile RAM 1GB, pids_limit 2048\n- Concurrency limit 6, auto fallback to Judge0/Wandbox\n\nActions:\n1. docker-compose down && up -d --build\n2. Wait 2s and Run again → auto Wandbox/Judge0\n3. Set JUDGE0_API_URL for stable backend';
+        pre.textContent=rawErr+'\n\n--- Fix applied in backend ---\n- nproc 64→512, compile RAM 1GB, pids_limit 2048\n- Concurrency limit 6, auto fallback to Judge0\n\nActions:\n1. docker-compose down && up -d --build\n2. Wait 2s and Run again → auto Judge0\n3. Set JUDGE0_API_URL for stable backend';
         h.appendChild(pre);
-        const retryBtn=document.createElement('button'); retryBtn.textContent='🔄 Retry with Wandbox/Judge0 fallback'; retryBtn.style.marginTop='10px'; retryBtn.style.padding='6px 12px'; retryBtn.style.background='#238636'; retryBtn.style.color='#fff'; retryBtn.style.border='1px solid #2ea043'; retryBtn.style.borderRadius='6px'; retryBtn.style.cursor='pointer';
+        const retryBtn=document.createElement('button'); retryBtn.textContent='🔄 Retry with Judge0 CE fallback'; retryBtn.style.marginTop='10px'; retryBtn.style.padding='6px 12px'; retryBtn.style.background='#238636'; retryBtn.style.color='#fff'; retryBtn.style.border='1px solid #2ea043'; retryBtn.style.borderRadius='6px'; retryBtn.style.cursor='pointer';
         retryBtn.onclick=()=>{ window.dispatchEvent(new KeyboardEvent('keydown',{key:'F9'})); };
         h.appendChild(retryBtn); o.appendChild(h);
       } else {
@@ -228,7 +228,7 @@ int main() {
           <b>Backend:</b> ${escapeHtml(mode)}<br>
           <b>Error:</b> ${(result.stderr||'').slice(0,500)}<br><br>
           1. <b>Judge0 CE (recommended):</b> Deploy Judge0: <code>docker run -p 2358:2358 judge0/judge0:1.13.1</code> + set <code>JUDGE0_API_URL</code><br>
-          2. <b>Wandbox</b> may 429/503 — auto fallback<br>
+          
           3. <b>Piston</b> 401 whitelist since 2026-02-15 — needs self-host<br>
           4. <b>Self-host backend:</b> <code>docker-compose up -d --build</code> (pids_limit 2048, mem 2GB)<br>
         </div>`;
@@ -252,25 +252,6 @@ int main() {
       ${result.compiler?`<span>⚙️ ${escapeHtml(String(result.compiler))}</span>`:''}
     `;
     o.appendChild(meta);
-  }
-
-  async function tryWandboxDirect(code, stdin){
-    const compilers=['gcc-head','gcc-14.2.0','gcc-13.2.0','gcc-12.2.0'];
-    for(const comp of compilers){
-      try{
-        const res=await fetch('https://wandbox.org/api/compile.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({compiler:comp,code,stdin, 'compiler-option-raw':'-std=gnu++17 -O2 -pipe', save:false})});
-        const text=await res.text(); let data; try{data=JSON.parse(text);}catch{continue;}
-        if(!data) continue;
-        if(data.compiler_error && /not found|unknown compiler/i.test(data.compiler_error)) continue;
-        const isCompileFail = data.status && data.status!=='0' && (data.compiler_error||data.compiler_message);
-        if(isCompileFail && (data.compiler_error||'').trim()){
-          return { success:false, stage:'compile', compile_error:data.compiler_error||data.compiler_message, stdout:data.program_output||'', stderr:data.program_error||'', mode:'wandbox-direct', compiler:comp };
-        }
-        const exitCode=data.status?parseInt(data.status,10):0;
-        return { success:exitCode===0, stage:'run', stdout:data.program_output||'', stderr:data.program_error||'', compile_error:'', exit_code:exitCode, mode:'wandbox-direct', compiler:comp };
-      }catch(e){ continue; }
-    }
-    return null;
   }
 
   async function tryJudge0Direct(code, stdin){
@@ -329,15 +310,14 @@ int main() {
         els.statusMsg.textContent='❌ API error'; return;
       }
       const total=+(performance.now()-t0).toFixed(1);
-      const isRetryable=r.status===503||j.retryable||/OCI runtime|crun: clone|Resource temporarily unavailable|Server busy|pids_limit|Piston 401|whitelist only|Wandbox.*429|Wandbox.*503/i.test((j.stderr||'')+(j.error||'')+(j.detail||'')+text);
+      const isRetryable=r.status===503||j.retryable||/OCI runtime|crun: clone|Resource temporarily unavailable|Server busy|pids_limit|Piston 401|whitelist only|Judge0/i.test((j.stderr||'')+(j.error||'')+(j.detail||'')+text);
 
       if(isRetryable && !window.__retried){
-        console.warn('[ide.ankb] retryable error, trying Judge0 then Wandbox direct',j);
-        toast('Backend busy, retrying with Judge0/Wandbox...','warn',3000);
+        console.warn('[ide.ankb] retryable error, trying Judge0 then Judge0 direct',j);
+        toast('Backend busy, retrying with Judge0 CE...','warn',3000);
         if(els.buildBar) els.buildBar.style.width='60%';
         // Try Judge0 direct first (as default per user request)
         let fallback=await tryJudge0Direct(code, stdin);
-        if(!fallback) fallback=await tryWandboxDirect(code, stdin);
         if(fallback){
           fallback.durationMs=total;
           renderOutput(fallback);
@@ -380,7 +360,7 @@ int main() {
       }
     }catch(e){
       setNetwork(false, e.message, 'offline');
-      renderOutput({success:false,stage:'error',stderr:`Network error: ${String(e&&e.message||e)}\n\n- Piston 401 whitelist, Wandbox may 429, Judge0 recommended\n- Check F12 > Network > /api/run`,durationMs:+(performance.now()-t0).toFixed(1)});
+      renderOutput({success:false,stage:'error',stderr:`Network error: ${String(e&&e.message||e)}\n\n- Piston 401 whitelist, Judge0 CE, Judge0 recommended\n- Check F12 > Network > /api/run`,durationMs:+(performance.now()-t0).toFixed(1)});
       toast('Network error: '+(e.message||e),'error'); els.statusMsg.textContent='🔴 Offline';
       els.runBtn.classList.remove('running'); els.runBtn.classList.add('failed'); els.runLabel.textContent='❌ Offline';
     } finally {
@@ -404,7 +384,7 @@ int main() {
     } else {
       els.connBadge.className='badge offline';
       els.netLabel.textContent='🔴 Offline';
-      if(els.connTooltip) els.connTooltip.textContent=`Backend unavailable\nMode: ${currentBackendMode}\nError: ${msg||'Unknown'}\nFix:\n- Deploy backend: docker-compose up -d\n- Or set JUDGE0_API_URL\n- Or wait for Wandbox`;
+      if(els.connTooltip) els.connTooltip.textContent=`Backend unavailable\nMode: ${currentBackendMode}\nError: ${msg||'Unknown'}\nFix:\n- Deploy backend: docker-compose up -d\n- Or set JUDGE0_API_URL\n- Or set JUDGE0_API_URL`;
     }
   }
 
@@ -540,7 +520,7 @@ int main() {
           if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(()=>toast('Output copied','ok',1200),()=>fallbackCopy(text)); }
           else fallbackCopy(text);
         },
-        about:()=>{ alert('ide.ankb — C++ Online IDE\nEditor: Monaco 0.45.0\nEngine: Node.js + g++ 14 / Judge0 (default) / Piston (401) / Wandbox fallback\nFeatures: Auto Save, Minimap, Theme switch, C++20/23 selector, Download/Open\n© '+new Date().getFullYear()+' ide.ankb'); },
+        about:()=>{ alert('ide.ankb — C++ Online IDE\nEditor: Monaco 0.45.0\nEngine: Node.js + g++ 14 / Judge0 CE only (Judge0 removed)\nFeatures: Auto Save, Minimap, Theme switch, C++20/23 selector, Download/Open\n© '+new Date().getFullYear()+' ide.ankb'); },
       });
       guard.onDevToolsChange((open)=>{ if(open){ setNetwork(false,'DevTools open','—'); els.statusMsg.textContent='DevTools open'; } else { setNetwork(true,'Ready',currentBackendMode); els.statusMsg.textContent='Ready'; } });
     }

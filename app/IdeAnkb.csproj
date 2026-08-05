@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyTitle>ide.ankb — C++ Online IDE Desktop</AssemblyTitle>
+    <Product>ide.ankb</Product>
+    <Version>1.0.0</Version>
+    <Authors>ankbuitv</Authors>
+    <Description>ide.ankb Desktop — C++ IDE with Judge0 CE compiler (no Wandbox)</Description>
+    <ApplicationIcon>..\public\logo.png</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="..\public\logo.png" />
+    <Resource Include="..\public\logo.png">
+      <Link>logo.png</Link>
+    </Resource>
+  </ItemGroup>
+
+</Project>
