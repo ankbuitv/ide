@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyTitle>ide.ankb - WebView2 Desktop</AssemblyTitle>
+    <Product>ide.ankb</Product>
+    <Version>1.0.0</Version>
+    <Authors>ankbuitv</Authors>
+    <Description>ide.ankb Desktop WebView2 - C++ IDE with offline g++ compiler option, Judge0 fallback, Discord RPC - .NET 10</Description>
+    <ApplicationIcon>..\public\logo.ico</ApplicationIcon>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2739.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="..\public\logo.png" />
+    <None Remove="..\public\logo.ico" />
+    <Resource Include="..\public\logo.png">
+      <Link>logo.png</Link>
+    </Resource>
+    <Resource Include="..\public\logo.ico">
+      <Link>logo.ico</Link>
+    </Resource>
+  </ItemGroup>
+
+</Project>
