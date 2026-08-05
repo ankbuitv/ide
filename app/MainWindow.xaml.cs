@@ -15,10 +15,13 @@ namespace IdeAnkb
         private static readonly HttpClient httpClient = new HttpClient();
         private string currentFilePath = null;
 
-        // Judge0 CE - default public, can be changed via env or settings
-        // For self-host: http://localhost:2358 or http://your-vps:2358
-        // For RapidAPI: https://judge0-ce.p.rapidapi.com + set JUDGE0_API_KEY
-        private string judge0Url = Environment.GetEnvironmentVariable("JUDGE0_API_URL") ?? "https://ce.judge0.com";
+        // Self-host options (simplest to most complex):
+        // 1. Own Node backend (simplest, single container): BACKEND_URL=http://localhost:8080
+        //    docker-compose up -d --build (pids_limit 2048, mem 2GB)
+        // 2. Judge0 CE: JUDGE0_API_URL=http://localhost:2358
+        //    docker run -d -p 2358:2358 judge0/judge0:1.13.1 (needs postgres/redis, use docker-compose.yml judge0 service)
+        private string backendUrl = Environment.GetEnvironmentVariable("BACKEND_URL") ?? "";
+        private string judge0Url = Environment.GetEnvironmentVariable("JUDGE0_API_URL") ?? Environment.GetEnvironmentVariable("JUDGE0_URL") ?? "https://ce.judge0.com";
         private string judge0Key = Environment.GetEnvironmentVariable("JUDGE0_API_KEY") ?? "";
         private string judge0Host = Environment.GetEnvironmentVariable("JUDGE0_API_HOST") ?? "";
 
@@ -28,9 +31,10 @@ namespace IdeAnkb
             CppVersionCombo.SelectionChanged += (s, e) => UpdateLangChip();
             EditorBox.SelectionChanged += (s, e) => UpdateCursor();
             UpdateLangChip();
-            StatusMsg.Text = "Ready - Judge0 CE default (no Wandbox)";
-            ConnLabel.Text = "🟢 Online (Judge0)";
-            ConnBadge.ToolTip = $"Judge0 CE: {judge0Url}\nMode: judge0\nClick Run to test";
+            var mode = !string.IsNullOrWhiteSpace(backendUrl) ? $"proxy ({backendUrl})" : $"Judge0 CE ({judge0Url})";
+            StatusMsg.Text = $"Ready - {mode}";
+            ConnLabel.Text = $"🟢 Online ({(string.IsNullOrWhiteSpace(backendUrl) ? "Judge0" : "Backend")})";
+            ConnBadge.ToolTip = $"Backend: {(!string.IsNullOrWhiteSpace(backendUrl) ? backendUrl : judge0Url)}\nMode: {(string.IsNullOrWhiteSpace(backendUrl) ? "judge0" : "proxy")}\nC++ versions: 23→11 descending\nSingle .exe self-contained, no .NET needed on other machines";
         }
 
         private void UpdateLangChip()
@@ -70,15 +74,33 @@ namespace IdeAnkb
 
             RunButton.IsEnabled = false;
             RunButton.Content = "⏳ Compiling...";
-            OutputBox.Text = $"⏳ Compiling with C++{cppVer} via Judge0 CE ({judge0Url})...\n";
-            OutputBox.Text += $"--- Code size: {code.Length} chars, stdin: {stdin.Length} chars ---\n";
+            var backendDesc = !string.IsNullOrWhiteSpace(backendUrl) ? $"Backend {backendUrl}" : $"Judge0 CE {judge0Url}";
+            OutputBox.Text = $"⏳ Compiling with C++{cppVer} via {backendDesc}...\n";
+            OutputBox.Text += $"--- Code size: {code.Length} chars, stdin: {stdin.Length} chars, C++{cppVer} (descending 23→11) ---\n";
             StatusMsg.Text = $"⏳ Compiling C++{cppVer}...";
             TimeChip.Text = "— ms";
             var sw = System.Diagnostics.Stopwatch.StartNew();
 
             try
             {
-                var result = await RunWithJudge0(code, stdin, cppVer);
+                Judge0Result result;
+                // 1. Try own backend first if BACKEND_URL set (simplest self-host: single container, no postgres/redis)
+                if (!string.IsNullOrWhiteSpace(backendUrl))
+                {
+                    OutputBox.Text += $"Trying backend proxy {backendUrl}/api/run ...\n";
+                    result = await RunWithBackend(code, stdin, cppVer);
+                    // If backend returns 503/crun, fallback to Judge0
+                    if (!result.Success && (result.Stderr?.Contains("crun") == true || result.Stderr?.Contains("Resource temporarily unavailable") == true || result.Stage == "error"))
+                    {
+                        OutputBox.Text += $"Backend busy ({result.Stderr.Substring(0, Math.Min(200, result.Stderr.Length))}) — falling back to Judge0...\n";
+                        var fallback = await RunWithJudge0(code, stdin, cppVer);
+                        if (fallback.Success || fallback.Stage == "compile") result = fallback;
+                    }
+                }
+                else
+                {
+                    result = await RunWithJudge0(code, stdin, cppVer);
+                }
                 sw.Stop();
                 var elapsed = sw.ElapsedMilliseconds;
 
@@ -292,6 +314,89 @@ namespace IdeAnkb
                     ExitCode = 500,
                     Mode = "judge0-parse-error",
                     Backend = judge0Url
+                };
+            }
+        }
+
+        // Simplest self-host: own Node backend (backend/server.js) — single container, no postgres/redis
+        // docker-compose up -d --build ide (port 8080)
+        private async Task<Judge0Result> RunWithBackend(string code, string stdin, string cppVersion)
+        {
+            var url = $"{backendUrl.TrimEnd('/')}/api/run";
+            var payload = new { code = code, stdin = stdin ?? "", version = cppVersion, cppVersion = cppVersion };
+            var json = JsonSerializer.Serialize(payload);
+            try
+            {
+                var resp = await httpClient.PostAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
+                var text = await resp.Content.ReadAsStringAsync();
+                JsonDocument doc;
+                try { doc = JsonDocument.Parse(text); } catch { return new Judge0Result { Success = false, Stage = "error", Stderr = $"Backend non-JSON {resp.StatusCode}: {text.Substring(0, Math.Min(1000, text.Length))}", CompileError = text, ExitCode = (int)resp.StatusCode, Mode = "backend", Backend = backendUrl }; }
+                var root = doc.RootElement;
+                string GetStr(string name) => root.TryGetProperty(name, out var el) ? el.GetString() ?? "" : "";
+                int GetInt(string name) => root.TryGetProperty(name, out var el) && el.TryGetInt32(out var v) ? v : 0;
+                bool GetBool(string name) => root.TryGetProperty(name, out var el) && el.GetBoolean();
+
+                var stage = GetStr("stage");
+                if (string.IsNullOrWhiteSpace(stage)) stage = "run";
+                var stdout = GetStr("stdout");
+                var stderr = GetStr("stderr");
+                var compileErr = GetStr("compile_error");
+                var exitCode = GetInt("exit_code");
+                var success = root.TryGetProperty("success", out var succEl) ? succEl.GetBoolean() : (exitCode == 0 && stage != "compile" && stage != "error");
+                // Detailed error display
+                if (stage == "compile" || (!string.IsNullOrWhiteSpace(compileErr) && !success))
+                {
+                    return new Judge0Result
+                    {
+                        Success = false,
+                        Stage = "compile",
+                        Stdout = stdout,
+                        Stderr = stderr,
+                        CompileError = compileErr,
+                        ExitCode = exitCode,
+                        Mode = "backend",
+                        Backend = backendUrl,
+                        Compiler = $"C++{cppVersion} g++",
+                    };
+                }
+                if (!resp.IsSuccessStatusCode || stage == "error")
+                {
+                    return new Judge0Result
+                    {
+                        Success = false,
+                        Stage = "error",
+                        Stdout = stdout,
+                        Stderr = stderr + "\n" + GetStr("error") + " " + GetStr("detail"),
+                        CompileError = compileErr,
+                        ExitCode = exitCode,
+                        Mode = "backend",
+                        Backend = backendUrl
+                    };
+                }
+                return new Judge0Result
+                {
+                    Success = success,
+                    Stage = stage,
+                    Stdout = stdout,
+                    Stderr = stderr,
+                    CompileError = compileErr,
+                    ExitCode = exitCode,
+                    Mode = "backend",
+                    Backend = backendUrl,
+                    Time = GetStr("durationMs"),
+                };
+            }
+            catch (Exception ex)
+            {
+                return new Judge0Result
+                {
+                    Success = false,
+                    Stage = "error",
+                    Stderr = $"Backend {backendUrl} unavailable: {ex.Message}\nFix: docker-compose up -d --build ide\nThen set BACKEND_URL=http://localhost:8080",
+                    CompileError = ex.ToString(),
+                    ExitCode = 500,
+                    Mode = "backend-error",
+                    Backend = backendUrl
                 };
             }
         }
