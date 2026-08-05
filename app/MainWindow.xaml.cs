@@ -122,38 +122,96 @@ namespace IdeAnkb
             catch { }
         }
 
+        private string gccFullPath = "g++"; // Will store full path if found in common locations
+
         private void CheckLocalCompiler()
         {
             try
             {
-                var psi = new ProcessStartInfo("g++", "--version") { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
-                using var proc = Process.Start(psi);
-                proc.WaitForExit(2000);
-                var output = proc.StandardOutput.ReadToEnd();
-                hasLocalGcc = proc.ExitCode == 0 && output.ToLower().Contains("g++");
-                gccVersion = output.Split('\n')[0].Trim();
-                if (hasLocalGcc)
+                string foundPath = null;
+                string output = "";
+
+                // First try PATH
+                try
                 {
+                    var psi = new ProcessStartInfo("g++", "--version") { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+                    using var proc = Process.Start(psi);
+                    proc.WaitForExit(2000);
+                    output = proc.StandardOutput.ReadToEnd();
+                    if (proc.ExitCode == 0 && output.ToLower().Contains("g++"))
+                    {
+                        foundPath = "g++";
+                    }
+                }
+                catch { }
+
+                // If not found in PATH, search common CodeBlocks and MinGW locations
+                if (foundPath == null)
+                {
+                    string[] commonPaths = new string[]
+                    {
+                        @"C:\Program Files\CodeBlocks\MinGW\bin\g++.exe",
+                        @"C:\Program Files (x86)\CodeBlocks\MinGW\bin\g++.exe",
+                        @"C:\CodeBlocks\MinGW\bin\g++.exe",
+                        @"C:\MinGW\bin\g++.exe",
+                        @"C:\mingw64\bin\g++.exe",
+                        @"C:\msys64\mingw64\bin\g++.exe",
+                        @"C:\msys64\ucrt64\bin\g++.exe",
+                        @"C:\msys64\mingw32\bin\g++.exe",
+                        @"C:\Tools\msys64\mingw64\bin\g++.exe",
+                        @"C:\ProgramData\chocolatey\bin\g++.exe",
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "CodeBlocks", "MinGW", "bin", "g++.exe"),
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "CodeBlocks", "MinGW", "bin", "g++.exe"),
+                    };
+
+                    foreach (var p in commonPaths)
+                    {
+                        try
+                        {
+                            if (File.Exists(p))
+                            {
+                                var psi2 = new ProcessStartInfo(p, "--version") { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+                                using var proc2 = Process.Start(psi2);
+                                proc2.WaitForExit(2000);
+                                var out2 = proc2.StandardOutput.ReadToEnd();
+                                if (proc2.ExitCode == 0 && out2.ToLower().Contains("g++"))
+                                {
+                                    foundPath = p;
+                                    output = out2;
+                                    break;
+                                }
+                            }
+                        }
+                        catch { continue; }
+                    }
+                }
+
+                if (foundPath != null)
+                {
+                    hasLocalGcc = true;
+                    gccFullPath = foundPath;
+                    gccVersion = output.Split('\n')[0].Trim();
                     StatusBackend.Text = $"Mode: Local g++ ({gccVersion})";
                     ConnLabel.Text = $"🟢 Online (Local g++)";
-                    ConnBadge.ToolTip = $"Local compiler found:\n{gccVersion}\nC++ versions: 23→11 descending\nReady to compile locally, no internet needed";
-                    StatusMsg.Text = "Ready - Local g++";
-                    try { UpdateDiscordPresence("Ready — Local g++ available", "main.cpp - ide.ankb"); } catch { }
+                    ConnBadge.ToolTip = $"Local compiler found:\n{foundPath}\n{gccVersion}\nC++ versions: 23→11 descending\nFrom CodeBlocks/MinGW, ready to compile locally, no internet needed";
+                    StatusMsg.Text = "Ready - Local g++ (CodeBlocks detected)";
+                    try { UpdateDiscordPresence("Ready — Local g++ available", $"Found at {Path.GetFileName(Path.GetDirectoryName(foundPath))} - ide.ankb"); } catch { }
                 }
                 else
                 {
+                    hasLocalGcc = false;
                     StatusBackend.Text = "Mode: No compiler";
                     ConnLabel.Text = "🔴 No g++ found";
-                    ConnBadge.ToolTip = "No local g++ compiler found!\n\nInstall MinGW-w64:\n1. winget install MSYS2.MSYS2\n2. Open MSYS2 MinGW64 terminal: pacman -S mingw-w64-x86_64-gcc\n3. Add C:\\msys64\\mingw64\\bin to PATH\n4. Restart app and run g++ --version\n\nOr install: https://www.mingw-w64.org/downloads/";
-                    StatusMsg.Text = "⚠️ No g++ — install required";
+                    ConnBadge.ToolTip = "No local g++ compiler found!\n\nYou have CodeBlocks but MinGW not in PATH.\n\nInstall/fix:\n1. Check CodeBlocks MinGW exists:\n   C:\\Program Files\\CodeBlocks\\MinGW\\bin\\g++.exe\n   C:\\Program Files (x86)\\CodeBlocks\\MinGW\\bin\\g++.exe\n2. Add that folder to PATH (System Env Variables)\n3. Or: winget install MSYS2.MSYS2 → pacman -S mingw-w64-x86_64-gcc → Add C:\\msys64\\mingw64\\bin to PATH\n4. Restart app and run g++ --version in CMD\n\nOr download: https://www.mingw-w64.org/downloads/";
+                    StatusMsg.Text = "⚠️ No g++ — install required (CodeBlocks MinGW not in PATH)";
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 hasLocalGcc = false;
                 StatusBackend.Text = "Mode: No compiler";
                 ConnLabel.Text = "🔴 No g++ found";
-                ConnBadge.ToolTip = "g++ not found in PATH\n\nInstall:\nwinget install MSYS2.MSYS2\npacman -S mingw-w64-x86_64-gcc\nAdd C:\\msys64\\mingw64\\bin to PATH";
+                ConnBadge.ToolTip = $"Error checking g++: {ex.Message}\n\nFix: Add MinGW/bin to PATH";
                 StatusMsg.Text = "⚠️ Install g++ required";
             }
         }
@@ -330,7 +388,9 @@ namespace IdeAnkb
 
                 string stdFlag = cppVersion switch { "11" => "-std=c++11", "14" => "-std=c++14", "17" => "-std=c++17", "20" => "-std=c++20", "23" => "-std=c++23", _ => "-std=c++17" };
 
-                var compilePsi = new ProcessStartInfo("g++", $"{stdFlag} -O2 -pipe -o \"{exePath}\" \"{srcPath}\"") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = tempDir };
+                // Use full path if found from CodeBlocks, else just g++
+                string gccExe = hasLocalGcc && !string.IsNullOrWhiteSpace(gccFullPath) && File.Exists(gccFullPath) ? gccFullPath : "g++";
+                var compilePsi = new ProcessStartInfo(gccExe, $"{stdFlag} -O2 -pipe -o \"{exePath}\" \"{srcPath}\"") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = tempDir };
                 using var compileProc = Process.Start(compilePsi);
                 var compileErr = await compileProc.StandardError.ReadToEndAsync();
                 var compileOut = await compileProc.StandardOutput.ReadToEndAsync();

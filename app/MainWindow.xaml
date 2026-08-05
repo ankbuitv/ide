@@ -4,6 +4,7 @@
         Title="ide.ankb — C++ Online IDE Desktop (Local g++)" Height="900" Width="1400"
         Background="#0d1117" Foreground="#c9d1d9"
         WindowStartupLocation="CenterScreen"
+        WindowState="Maximized"
         Icon="pack://application:,,,/logo.ico"
         Closing="Window_Closing"
         Loaded="Window_Loaded"
