@@ -112,9 +112,22 @@
       // Hardcoded fallback so the editor is never empty
       return `#include <bits/stdc++.h>
 using namespace std;
+#define ll long long
+#define fors(i, a, b) for (int i = a; i < b; i++)
+
+void sub() {
+ios_base::sync_with_stdio(false);
+cin.tie(0); cout.tie(0);
+}
+
+void sol() {
+
+}
+
 int main() {
-    cout << "Hello, world!" << endl;
-    return 0;
+sub();
+sol();
+return 0;
 }
 `;
     }
