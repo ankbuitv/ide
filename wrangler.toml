@@ -1,0 +1,28 @@
+name = "online-ide"
+main = "worker.js"
+compatibility_date = "2024-08-05"
+pages_build_output_dir = "public"
+
+# For Cloudflare Workers with static assets (wrangler deploy)
+# This serves public/ folder + API via worker.js
+[assets]
+directory = "./public"
+not_found_handling = "single-page-application"
+
+# Optional: proxy to your own Node backend
+# Set in dashboard: Settings -> Variables -> BACKEND_URL
+[vars]
+# BACKEND_URL = "https://your-backend.example.com"
+
+# For Cloudflare Pages (recommended for this project):
+# - Create Pages project, NOT Workers
+# - Framework preset: None
+# - Build command: (empty)
+# - Build output dir: public
+# - Functions auto-detected from functions/api/[[path]].js
+# - Do NOT set Deploy command to `npx wrangler deploy` for Pages — leave it empty
+# If you must use Workers:
+# - Keep this wrangler.toml with main = worker.js and [assets]
+# - Root directory: /
+# - Build command: (empty)
+# - Deploy command: npx wrangler deploy
