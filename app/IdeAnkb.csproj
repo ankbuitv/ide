@@ -22,8 +22,8 @@
     </Resource>
   </ItemGroup>
 
-  <!-- Discord RPC is optional — via reflection, no NuGet required for build -->
-  <!-- If you want Discord RPC, add: dotnet add package Lachee.DiscordRPC --version 1.0.1.65 -->
-  <!-- Or download DLL and reference manually. App works without it, RPC will be silently skipped. -->
+  <!-- Discord RPC is optional via reflection, no NuGet required for build -->
+  <!-- If you want Discord RPC, add package: dotnet add package Lachee.DiscordRPC version 1.0.1.65 -->
+  <!-- App works without it, RPC will be silently skipped -->
 
 </Project>
