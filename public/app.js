@@ -42,7 +42,7 @@
 
   const FALLBACK_TEMPLATE = `#include <bits/stdc++.h>
 using namespace std;
-
+#define ll long long
 #define fors(i, a, b) for (int i = a; i < b; i++)
 
 void sub() {
