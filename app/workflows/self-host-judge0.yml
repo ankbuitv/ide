@@ -1,0 +1,120 @@
+name: Self-host Judge0 CE for ide.ankb
+
+# User request: tự host judge0 qua cái workflow của tôi, github action cho dễ, để tôi tự điền url
+# This workflow shows how to self-host Judge0 CE free on GitHub Actions or your VPS
+# For desktop app, you can set JUDGE0_API_URL to your self-hosted instance
+
+on:
+  workflow_dispatch:
+    inputs:
+      judge0_url:
+        description: 'Your Judge0 CE URL (e.g., http://your-vps-ip:2358 or https://judge0.yourdomain.com)'
+        required: false
+        default: 'https://ce.judge0.com'
+      deploy_to_vps:
+        description: 'Deploy to VPS via SSH? (true/false)'
+        required: false
+        default: 'false'
+
+jobs:
+  # Option 1: Run Judge0 as service container in GitHub Actions (for testing, not persistent)
+  test-judge0:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: judge0
+          POSTGRES_USER: judge0
+          POSTGRES_PASSWORD: judge0
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wait for Postgres & Redis
+        run: sleep 15
+
+      - name: Run Judge0 CE
+        run: |
+          docker run -d --name judge0 \
+            --network host \
+            -e REDIS_HOST=localhost \
+            -e POSTGRES_HOST=localhost \
+            -e POSTGRES_DB=judge0 \
+            -e POSTGRES_USER=judge0 \
+            -e POSTGRES_PASSWORD=judge0 \
+            --privileged \
+            judge0/judge0:1.13.1
+          sleep 20
+          docker logs judge0
+          curl -v http://localhost:2358/about || curl -v http://localhost:2358/
+
+      - name: Test compilation via Judge0
+        run: |
+          curl -X POST http://localhost:2358/submissions?base64_encoded=false&wait=true \
+            -H "Content-Type: application/json" \
+            -d '{
+              "source_code": "#include <bits/stdc++.h>\nusing namespace std; int main(){cout<<\"Hello from Judge0 self-host\"; return 0;}",
+              "language_id": 54,
+              "stdin": ""
+            }'
+
+  # Option 2: Deploy to your VPS via SSH (fill url yourself)
+  deploy-judge0-to-vps:
+    if: ${{ inputs.deploy_to_vps == 'true' }}
+    runs-on: ubuntu-latest
+    needs: test-judge0
+    steps:
+      - name: Deploy Judge0 to VPS via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /opt/ide
+            git pull origin app
+            docker-compose up -d judge0
+            docker ps
+            echo "Judge0 deployed at http://${{ secrets.VPS_HOST }}:2358"
+            echo "Set in Cloudflare: JUDGE0_API_URL=http://${{ secrets.VPS_HOST }}:2358"
+
+  # Option 3: Build desktop .exe with your custom Judge0 URL embedded
+  build-desktop-with-custom-judge0:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: app
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Set Judge0 URL from input
+        run: |
+          echo "JUDGE0_API_URL=${{ inputs.judge0_url }}" >> $env:GITHUB_ENV
+        shell: pwsh
+      - name: Build
+        working-directory: app
+        run: |
+          dotnet publish IdeAnkb.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ide.ankb-desktop-custom-judge0
+          path: app/publish/IdeAnkb.exe
