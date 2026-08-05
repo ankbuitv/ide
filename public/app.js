@@ -1,16 +1,15 @@
 /* ============================================================
- * Online IDE — Frontend Controller (Cloudflare Pages fix)
+ * ide.ankb — Frontend Controller (v9.5 UI/UX + Judge0 default)
  * Fixes:
- * - fetch /api/* uses text() + JSON.parse with try/catch to avoid
- *   "Unexpected end of JSON input" crash on static deploy
- * - Friendly error UI explaining deployment options
- * - Robust against 404 HTML responses from Pages without Functions
+ * - Judge0 CE default fallback (no backend needed)
+ * - Auto Save, Download/Open file, C++ version selector, Theme switch
+ * - Connection badge 🟢/🟡/🔴 with tooltip + backend mode
+ * - Output colors success/warning/error, loading states
+ * - Ctrl+A/C/V/X/Z/Y allowed, devtools blocked
+ * - Resizable gutter + minimap, ligatures, sticky scroll
  * ============================================================ */
 (function () {
   'use strict';
-
-  /* ---------------- Config & state ---------------- */
-
   const API_BASE = (window.IDE_API_BASE || '').replace(/\/+$/, '');
 
   const els = {
@@ -19,6 +18,11 @@
     runLabel: document.getElementById('runLabel'),
     formatBtn: document.getElementById('formatBtn'),
     resetBtn: document.getElementById('resetBtn'),
+    openFileBtn: document.getElementById('openFileBtn'),
+    downloadBtn: document.getElementById('downloadBtn'),
+    sideOpenFile: document.getElementById('sideOpenFile'),
+    sideDownload: document.getElementById('sideDownload'),
+    openFileInput: document.getElementById('openFileInput'),
     clearStdin: document.getElementById('clearStdinBtn'),
     clearOut: document.getElementById('clearOutBtn'),
     closeTab: document.getElementById('closeTab'),
@@ -30,20 +34,41 @@
     statusCursor: document.getElementById('statusCursor'),
     statusMsg: document.getElementById('statusMsg'),
     statusTime: document.getElementById('statusTime'),
+    statusLang: document.getElementById('statusLang'),
+    statusEncoding: document.getElementById('statusEncoding'),
+    statusSpaces: document.getElementById('statusSpaces'),
+    statusBackend: document.getElementById('statusBackend'),
     netDot: document.getElementById('netDot'),
     netLabel: document.getElementById('netLabel'),
+    connBadge: document.getElementById('connBadge'),
+    connTooltip: document.getElementById('connTooltip'),
     toastHost: document.getElementById('toastHost'),
     gutter: document.getElementById('gutter'),
+    cppVersion: document.getElementById('cppVersion'),
+    themeSelect: document.getElementById('themeSelect'),
+    langChip: document.getElementById('langChip'),
+    autoSaveChip: document.getElementById('autoSaveChip'),
+    buildProgress: document.getElementById('buildProgress'),
+    buildBar: document.getElementById('buildBar'),
+    menuFile: document.getElementById('menuFile'),
+    menuEdit: document.getElementById('menuEdit'),
+    menuView: document.getElementById('menuView'),
+    menuRun: document.getElementById('menuRun'),
+    menuHelp: document.getElementById('menuHelp'),
   };
 
   let editor = null;
   let defaultTemplate = '';
   let running = false;
+  let currentBackendMode = '—';
+  let autoSaveInterval = null;
 
   const FALLBACK_TEMPLATE = `#include <bits/stdc++.h>
 using namespace std;
-#define ll long long
+
 #define fors(i, a, b) for (int i = a; i < b; i++)
+
+#define ll long long
 
 void sub() {
     ios_base::sync_with_stdio(false);
@@ -51,11 +76,7 @@ void sub() {
 }
 
 void sol() {
-    int n;
-    if (!(cin >> n)) return;
-    vector<int> a(n);
-    fors(i, 0, n) cin >> a[i];
-    fors(i, 0, n) cout << a[i] << " ";
+   cout << "Hello world!";
 }
 
 int main() {
@@ -65,489 +86,517 @@ int main() {
 }
 `;
 
-  /* ---------------- Toast helpers ---------------- */
+  const THEMES = {
+    'ide-dark': { label: 'Dark+', base: 'vs-dark' },
+    'vs-dark': { label: 'VS Dark', base: 'vs-dark' },
+    'hc-black': { label: 'High Contrast', base: 'hc-black' },
+    'github-dark': { label: 'GitHub Dark', base: 'vs-dark' },
+  };
 
-  function toast(message, type = 'info', timeout = 3500) {
-    const el = document.createElement('div');
-    el.className = 'toast ' + (type === 'error' ? 'error' : type === 'ok' ? 'ok' : type === 'warn' ? 'warn' : '');
-    el.textContent = message;
+  const CPP_VERSIONS = {
+    '11': { std: 'c++11', judge0: 52 },
+    '14': { std: 'c++14', judge0: 52 },
+    '17': { std: 'c++17', judge0: 54 },
+    '20': { std: 'c++20', judge0: 54 },
+    '23': { std: 'c++23', judge0: 54 },
+  };
+
+  function toast(message, type='info', timeout=3500){
+    const el=document.createElement('div');
+    el.className='toast '+(type==='error'?'error':type==='ok'?'ok':type==='warn'?'warn':'');
+    el.textContent=message;
     els.toastHost.appendChild(el);
-    setTimeout(() => {
-      el.style.transition = 'opacity .25s ease, transform .25s ease';
-      el.style.opacity = '0';
-      el.style.transform = 'translateY(6px)';
-      setTimeout(() => el.remove(), 250);
-    }, timeout);
+    setTimeout(()=>{ el.style.transition='opacity .25s ease, transform .25s ease'; el.style.opacity='0'; el.style.transform='translateY(6px)'; setTimeout(()=>el.remove(),250); }, timeout);
   }
 
-  /* ---------------- Monaco loader ---------------- */
-
-  const THEME = 'ide-dark';
-  function defineTheme(monaco) {
-    monaco.editor.defineTheme(THEME, {
-      base: 'vs-dark',
-      inherit: true,
-      rules: [
-        { token: 'comment', foreground: '6e7681', fontStyle: 'italic' },
-        { token: 'keyword', foreground: 'ff7b72' },
-        { token: 'string', foreground: 'a5d6ff' },
-        { token: 'number', foreground: '79c0ff' },
-        { token: 'type', foreground: 'ffa657' },
-        { token: 'identifier', foreground: 'c9d1d9' },
-      ],
-      colors: {
-        'editor.background': '#0d1117',
-        'editor.foreground': '#c9d1d9',
-        'editorLineNumber.foreground': '#3a4148',
-        'editorLineNumber.activeForeground': '#c9d1d9',
-        'editor.lineHighlightBackground': '#161b22',
-        'editor.lineHighlightBorder': '#161b22',
-        'editorCursor.foreground': '#58a6ff',
-        'editor.selectionBackground': '#264f78',
-        'editor.inactiveSelectionBackground': '#1f3a5a',
-        'editorWhitespace.foreground': '#21262d',
-        'editorIndentGuide.background': '#21262d',
-        'editorIndentGuide.activeBackground': '#30363d',
-        'editorBracketMatch.background': '#1f3a5a',
-        'editorBracketMatch.border': '#58a6ff',
-        'scrollbarSlider.background': '#21262d80',
-        'scrollbarSlider.hoverBackground': '#30363d',
-        'scrollbarSlider.activeBackground': '#484f58',
-      },
-    });
-  }
-
-  function loadMonaco() {
-    if (window.__monacoReady) return window.__monacoReady();
-    return new Promise((resolve, reject) => {
-      if (!window.require) return reject(new Error('Monaco loader missing'));
-      window.require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
-      window.require(['vs/editor/editor.main'], () => resolve(window.monaco), (err) => reject(err));
-    });
-  }
-
-  /* ---------------- Default template fetch — FIX C ---------------- */
-
-  async function fetchTemplate() {
-    try {
-      const r = await fetch(API_BASE + '/api/template', { cache: 'no-store' });
-      const text = await r.text();
-      let j;
-      try {
-        j = text ? JSON.parse(text) : {};
-      } catch (parseErr) {
-        console.warn('[ide] /api/template returned non-JSON', parseErr, text.slice(0, 500));
-        // Throw to trigger fallback template below
-        throw new Error(`API template parse error: ${parseErr.message} | body: ${text.slice(0, 200)}`);
-      }
-      if (!r.ok) {
-        throw new Error(`HTTP ${r.status}: ${j.error || text.slice(0, 200)}`);
-      }
-      return j.code || j.template || '';
-    } catch (e) {
-      console.warn('[ide] fetchTemplate fallback used:', e.message);
-      // Hardcoded fallback so the editor is never empty
-      return FALLBACK_TEMPLATE;
+  function defineTheme(monaco, id){
+    if(id==='ide-dark'){
+      monaco.editor.defineTheme('ide-dark', {
+        base:'vs-dark', inherit:true,
+        rules:[
+          {token:'comment',foreground:'6e7681',fontStyle:'italic'},
+          {token:'keyword',foreground:'ff7b72'},
+          {token:'string',foreground:'a5d6ff'},
+          {token:'number',foreground:'79c0ff'},
+          {token:'type',foreground:'ffa657'},
+          {token:'identifier',foreground:'c9d1d9'},
+        ],
+        colors:{
+          'editor.background':'#0d1117','editor.foreground':'#c9d1d9',
+          'editorLineNumber.foreground':'#3a4148','editorLineNumber.activeForeground':'#c9d1d9',
+          'editor.lineHighlightBackground':'#161b22','editor.lineHighlightBorder':'#161b22',
+          'editorCursor.foreground':'#58a6ff','editor.selectionBackground':'#264f78',
+          'editor.inactiveSelectionBackground':'#1f3a5a','editorWhitespace.foreground':'#21262d',
+          'editorIndentGuide.background':'#21262d','editorIndentGuide.activeBackground':'#30363d',
+          'editorBracketMatch.background':'#1f3a5a','editorBracketMatch.border':'#58a6ff',
+          'scrollbarSlider.background':'#21262d80','scrollbarSlider.hoverBackground':'#30363d','scrollbarSlider.activeBackground':'#484f58',
+        },
+      });
+    } else if(id==='github-dark'){
+      monaco.editor.defineTheme('github-dark', {
+        base:'vs-dark', inherit:true,
+        rules:[
+          {token:'comment',foreground:'8b949e',fontStyle:'italic'},
+          {token:'keyword',foreground:'ff7b72'},
+          {token:'string',foreground:'a5d6ff'},
+          {token:'number',foreground:'79c0ff'},
+        ],
+        colors:{
+          'editor.background':'#0d1117','editor.foreground':'#e6edf3',
+          'editorLineNumber.foreground':'#484f58','editor.lineHighlightBackground':'#161b22',
+        },
+      });
     }
   }
 
-  /* ---------------- Output rendering ---------------- */
-
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+  function loadMonaco(){
+    if(window.__monacoReady) return window.__monacoReady();
+    return new Promise((resolve,reject)=>{
+      if(!window.require) return reject(new Error('Monaco loader missing'));
+      window.require.config({paths:{vs:'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs'}});
+      window.require(['vs/editor/editor.main'],()=>resolve(window.monaco),(err)=>reject(err));
+    });
   }
 
-  function renderOutput(result) {
-    const o = els.output;
-    o.innerHTML = '';
+  async function fetchTemplate(){
+    try{
+      const r=await fetch(API_BASE+'/api/template',{cache:'no-store'});
+      const text=await r.text(); let j; try{j=text?JSON.parse(text):{};}catch(e){throw new Error(`Template parse error: ${e.message}`);}
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
+      return j.code||j.template||'';
+    }catch(e){ console.warn('[ide.ankb] fetchTemplate fallback',e.message); return FALLBACK_TEMPLATE; }
+  }
 
-    if (!result) {
-      o.innerHTML = '<div class="empty">// Run your code to see the output here</div>';
-      return;
-    }
+  function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
 
-    if (result.stage === 'compile' || (result.compile_error && result.compile_error.trim())) {
-      const h = document.createElement('div');
-      h.innerHTML = '<div style="color:#f85149;font-weight:600;margin-bottom:6px;">⛔ Compilation failed</div>';
-      const pre = document.createElement('div');
-      pre.className = 'stderr';
-      pre.textContent = result.compile_error || result.stderr || '(no stderr)';
-      h.appendChild(pre);
-      o.appendChild(h);
-    } else if (result.stage === 'error') {
-      // Friendly error UI for deployment issues
-      const h = document.createElement('div');
-      h.innerHTML = '<div style="color:#f85149;font-weight:600;margin-bottom:8px;">⚠️ Runtime error / API not reachable</div>';
-      const pre = document.createElement('div');
-      pre.className = 'stderr';
-      pre.style.whiteSpace = 'pre-wrap';
-      pre.textContent = result.stderr || result.compile_error || 'Unknown error';
-      h.appendChild(pre);
+  function renderOutput(result){
+    const o=els.output; o.innerHTML=''; o.className='output';
+    if(!result){ o.innerHTML='<div class="empty">// Run your code to see the output here</div>'; return; }
 
-      // Add helpful deployment guide if error looks like static deploy without backend
-      const guide = document.createElement('div');
-      guide.style.marginTop = '12px';
-      guide.style.padding = '10px';
-      guide.style.background = '#161b22';
-      guide.style.border = '1px solid #30363d';
-      guide.style.borderRadius = '6px';
-      guide.style.fontSize = '12px';
-      guide.style.lineHeight = '1.5';
-      guide.innerHTML = `
-        <div style="font-weight:600;color:#58a6ff;margin-bottom:6px;">💡 How to fix (Cloudflare Pages deployment):</div>
-        <div style="color:#8b949e;">
-          1. <b>Recommended:</b> Ensure <code>functions/api/[[path]].js</code> is included in repo.<br>
-             Cloudflare Dashboard → Pages → Settings → Functions → should auto-detect.<br>
-             Build output directory must be <code>public</code>, build command empty.<br><br>
-          2. <b>Piston fallback (no backend needed):</b> The included Pages Function automatically uses
-             <a href="https://emkc.org/api/v2/piston" target="_blank" style="color:#58a6ff;">Piston API</a> when <code>BACKEND_URL</code> is not set.<br><br>
-          3. <b>Self-hosted Docker backend:</b> Deploy <code>backend/</code> somewhere, then set env var in Cloudflare Pages:<br>
-             <code>BACKEND_URL=https://your-backend.com</code><br>
-             Pages Function will proxy <code>/api/*</code> to it.
-        </div>
-      `;
-      h.appendChild(guide);
+    // Determine color class
+    let colorClass='info';
+    if(result.success) colorClass='success';
+    else if(result.stage==='compile') colorClass='error';
+    else if(result.stage==='error'){
+      const errText=(result.stderr||'').toLowerCase();
+      if(errText.includes('oci runtime')||errText.includes('crun: clone')||errText.includes('resource temporarily unavailable')) colorClass='warning';
+      else if(errText.includes('piston 401')||errText.includes('whitelist')) colorClass='warning';
+      else colorClass='error';
+    } else if(result.timed_out) colorClass='warning';
+    else colorClass='error';
+    o.classList.add(colorClass);
 
-      o.appendChild(h);
-    } else {
-      const out = result.stdout || '';
-      if (out.length) {
-        const pre = document.createElement('div');
-        pre.textContent = out;
-        o.appendChild(pre);
+    if(result.stage==='compile' || (result.compile_error && result.compile_error.trim())){
+      const h=document.createElement('div'); const rawErr=result.compile_error||result.stderr||'(no stderr)';
+      const isOci=/OCI runtime error|crun: clone|Resource temporarily unavailable|fork: retry|Cannot allocate memory|pids_limit|crun/i.test(rawErr);
+      if(isOci){
+        h.innerHTML='<div style="color:#f85149;font-weight:600;margin-bottom:6px;">⚠️ Container overloaded (crun clone EAGAIN)</div>';
+        const pre=document.createElement('div'); pre.className='stderr'; pre.style.whiteSpace='pre-wrap';
+        pre.textContent=rawErr+'\n\n--- Fix applied in backend ---\n- nproc 64→512, compile RAM 1GB, pids_limit 2048\n- Concurrency limit 6, auto fallback to Judge0/Wandbox\n\nActions:\n1. docker-compose down && up -d --build\n2. Wait 2s and Run again → auto Wandbox/Judge0\n3. Set JUDGE0_API_URL for stable backend';
+        h.appendChild(pre);
+        const retryBtn=document.createElement('button'); retryBtn.textContent='🔄 Retry with Wandbox/Judge0 fallback'; retryBtn.style.marginTop='10px'; retryBtn.style.padding='6px 12px'; retryBtn.style.background='#238636'; retryBtn.style.color='#fff'; retryBtn.style.border='1px solid #2ea043'; retryBtn.style.borderRadius='6px'; retryBtn.style.cursor='pointer';
+        retryBtn.onclick=()=>{ window.dispatchEvent(new KeyboardEvent('keydown',{key:'F9'})); };
+        h.appendChild(retryBtn); o.appendChild(h);
       } else {
-        const empty = document.createElement('div');
-        empty.className = 'empty';
-        empty.textContent = '// (no stdout)';
-        o.appendChild(empty);
+        h.innerHTML='<div style="color:#f85149;font-weight:600;margin-bottom:6px;">❌ Compile Error</div>';
+        // Try to parse line numbers like main.cpp:12
+        const pre=document.createElement('div'); pre.className='stderr'; pre.style.whiteSpace='pre-wrap';
+        // Highlight file:line
+        const highlighted=rawErr.replace(/((?:main\.cpp|file|line|:)(\d+):?(\d+)?)/gi, (m)=>`→ ${m}`);
+        pre.textContent=rawErr; h.appendChild(pre);
+        // If contains main.cpp:line, make clickable to jump
+        const lines=rawErr.split('\n');
+        lines.forEach(l=>{
+          const m=l.match(/main\.cpp:(\d+):(\d+)?/);
+          if(m && editor){
+            const jump=document.createElement('div'); jump.style.fontSize='11px'; jump.style.color='#58a6ff'; jump.style.cursor='pointer'; jump.style.marginTop='2px';
+            jump.textContent=`↳ Jump to line ${m[1]}:${m[2]||1}`;
+            jump.onclick=()=>{ if(editor){ editor.revealLineInCenter(parseInt(m[1])); editor.setPosition({lineNumber:parseInt(m[1]), column:parseInt(m[2]||1)}); editor.focus(); } };
+            h.appendChild(jump);
+          }
+        });
+        o.appendChild(h);
       }
-      if (result.stderr && result.stderr.trim()) {
-        const pre = document.createElement('div');
-        pre.className = 'stderr';
-        pre.style.marginTop = '10px';
-        pre.textContent = '[stderr]\n' + result.stderr;
-        o.appendChild(pre);
-      }
+    } else if(result.stage==='error'){
+      const h=document.createElement('div'); h.innerHTML='<div style="color:#f85149;font-weight:600;margin-bottom:8px;">💥 Runtime Error / API not reachable</div>';
+      const pre=document.createElement('div'); pre.className='stderr'; pre.style.whiteSpace='pre-wrap'; pre.textContent=result.stderr||result.compile_error||'Unknown error'; h.appendChild(pre);
+      const guide=document.createElement('div'); guide.style.marginTop='12px'; guide.style.padding='10px'; guide.style.background='#161b22'; guide.style.border='1px solid #30363d'; guide.style.borderRadius='8px'; guide.style.fontSize='12px'; guide.style.lineHeight='1.5';
+      const mode=result.mode||currentBackendMode||'unknown';
+      const backendInfo=result.backend||'—';
+      guide.innerHTML=`<div style="font-weight:600;color:#58a6ff;margin-bottom:6px;">💡 Fix (ide.ankb):</div>
+        <div style="color:#8b949e;">
+          <b>Backend:</b> ${escapeHtml(mode)}<br>
+          <b>Error:</b> ${(result.stderr||'').slice(0,500)}<br><br>
+          1. <b>Judge0 CE (recommended):</b> Deploy Judge0: <code>docker run -p 2358:2358 judge0/judge0:1.13.1</code> + set <code>JUDGE0_API_URL</code><br>
+          2. <b>Wandbox</b> may 429/503 — auto fallback<br>
+          3. <b>Piston</b> 401 whitelist since 2026-02-15 — needs self-host<br>
+          4. <b>Self-host backend:</b> <code>docker-compose up -d --build</code> (pids_limit 2048, mem 2GB)<br>
+        </div>`;
+      h.appendChild(guide); o.appendChild(h);
+    } else {
+      const out=result.stdout||'';
+      if(out.length){ const pre=document.createElement('div'); pre.className='stdout'; pre.textContent=out; o.appendChild(pre); }
+      else { const empty=document.createElement('div'); empty.className='empty'; empty.textContent='// (no stdout)'; o.appendChild(empty); }
+      if(result.stderr&&result.stderr.trim()){ const pre=document.createElement('div'); pre.className='stderr'; pre.style.marginTop='10px'; pre.textContent='[stderr]\n'+result.stderr; o.appendChild(pre); }
     }
-
-    const meta = document.createElement('div');
-    meta.className = 'meta';
-    const ok = result.success;
-    meta.innerHTML = `
-      <span class="${ok ? 'ok' : 'err'}">${ok ? '✓ success' : '✗ failed'}</span>
-      <span>stage: ${escapeHtml(result.stage || 'run')}</span>
-      <span>time: ${escapeHtml(String(result.durationMs ?? '—'))} ms</span>
-      ${result.exit_code != null ? `<span>exit: ${escapeHtml(String(result.exit_code))}</span>` : ''}
-      ${result.timed_out ? '<span class="err">timed out (2s)</span>' : ''}
-      ${result.signal ? `<span>signal: ${escapeHtml(String(result.signal))}</span>` : ''}
-      ${result.mode ? `<span>mode: ${escapeHtml(String(result.mode))}</span>` : ''}
+    const meta=document.createElement('div'); meta.className='meta';
+    const ok=result.success;
+    meta.innerHTML=`
+      <span class="${ok?'ok':'err'}">${ok?'✅ Success':'❌ Failed'}</span>
+      <span>stage: ${escapeHtml(result.stage||'run')}</span>
+      <span>time: ${escapeHtml(String(result.durationMs??'—'))} ms</span>
+      ${result.exit_code!=null?`<span>exit: ${escapeHtml(String(result.exit_code))}</span>`:''}
+      ${result.timed_out?'<span class="err">⏳ TLE (2s)</span>':''}
+      ${result.signal?`<span>signal: ${escapeHtml(String(result.signal))}</span>`:''}
+      ${result.mode?`<span>🔧 ${escapeHtml(String(result.mode))}</span>`:''}
+      ${result.compiler?`<span>⚙️ ${escapeHtml(String(result.compiler))}</span>`:''}
     `;
     o.appendChild(meta);
   }
 
-  /* ---------------- Run — FIX C ---------------- */
-
-  async function run() {
-    if (running) return;
-    running = true;
-    els.runBtn.disabled = true;
-    const origLabel = els.runLabel.textContent;
-    els.runLabel.innerHTML = '<span class="spinner"></span> Running';
-    els.statusMsg.textContent = 'Compiling & running…';
-    els.statusTime.textContent = '— ms';
-    els.timeChip.textContent = '— ms';
-
-    const code = editor.getValue();
-    const stdin = els.stdin.value;
-    const t0 = performance.now();
-
-    try {
-      const r = await fetch(API_BASE + '/api/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, stdin }),
-      });
-
-      const text = await r.text();
-      let j;
-      try {
-        j = text ? JSON.parse(text) : {};
-      } catch (parseErr) {
-        const total = +(performance.now() - t0).toFixed(1);
-        console.error('[ide] /api/run returned non-JSON', parseErr, text.slice(0, 1000));
-        renderOutput({
-          success: false,
-          stage: 'error',
-          stderr: `API returned invalid JSON (status ${r.status}). This usually happens when deploying only static files to Cloudflare Pages without Pages Functions.\n\n` +
-                  `Raw response (first 1000 chars):\n${text.slice(0, 1000)}\n\n` +
-                  `Fix:\n` +
-                  `- Ensure functions/api/[[path]].js exists in repo and Cloudflare Pages detects Functions\n` +
-                  `- Build output directory = public, Build command = (empty)\n` +
-                  `- Optional: Set BACKEND_URL env var to your Node.js backend (https://your-backend.com)\n` +
-                  `- Fallback uses Piston API (https://emkc.org) automatically if no backend set\n\n` +
-                  `Parse error: ${parseErr.message}`,
-          compile_error: '',
-          durationMs: total,
-          mode: 'parse_error',
-        });
-        setNetwork(false);
-        toast('API returned invalid JSON — check Cloudflare Functions deployment', 'error', 6000);
-        els.statusMsg.textContent = 'API error';
-        return;
-      }
-
-      const total = +(performance.now() - t0).toFixed(1);
-
-      if (!r.ok) {
-        renderOutput({
-          success: false,
-          stage: 'error',
-          stderr: j.error || j.stderr || ('HTTP ' + r.status + ': ' + text.slice(0, 500)),
-          compile_error: j.compile_error || '',
-          durationMs: total,
-          mode: j.mode || undefined,
-        });
-        setNetwork(false);
-        toast('Request failed: ' + (j.error || j.stderr || r.status), 'error');
-        els.statusMsg.textContent = 'Error';
-      } else {
-        j.durationMs = j.durationMs ?? total;
-        renderOutput(j);
-        setNetwork(true);
-        if (j.success) {
-          els.statusMsg.textContent = 'Run completed' + (j.mode ? ` (${j.mode})` : '');
-          toast('Run completed in ' + j.durationMs + ' ms' + (j.mode ? ` [${j.mode}]` : ''), 'ok', 2000);
-        } else if (j.timed_out) {
-          els.statusMsg.textContent = 'Timed out';
-          toast('Execution exceeded 2s timeout', 'warn');
-        } else if (j.stage === 'compile') {
-          els.statusMsg.textContent = 'Compilation error';
-          toast('Compilation error', 'error');
-        } else {
-          els.statusMsg.textContent = 'Non-zero exit';
-          toast('Process exited with code ' + (j.exit_code ?? '?'), 'warn');
+  async function tryWandboxDirect(code, stdin){
+    const compilers=['gcc-head','gcc-14.2.0','gcc-13.2.0','gcc-12.2.0'];
+    for(const comp of compilers){
+      try{
+        const res=await fetch('https://wandbox.org/api/compile.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({compiler:comp,code,stdin, 'compiler-option-raw':'-std=gnu++17 -O2 -pipe', save:false})});
+        const text=await res.text(); let data; try{data=JSON.parse(text);}catch{continue;}
+        if(!data) continue;
+        if(data.compiler_error && /not found|unknown compiler/i.test(data.compiler_error)) continue;
+        const isCompileFail = data.status && data.status!=='0' && (data.compiler_error||data.compiler_message);
+        if(isCompileFail && (data.compiler_error||'').trim()){
+          return { success:false, stage:'compile', compile_error:data.compiler_error||data.compiler_message, stdout:data.program_output||'', stderr:data.program_error||'', mode:'wandbox-direct', compiler:comp };
         }
-        els.statusTime.textContent = j.durationMs + ' ms';
-        els.timeChip.textContent = j.durationMs + ' ms';
-      }
-    } catch (e) {
-      setNetwork(false);
-      renderOutput({
-        success: false, stage: 'error',
-        stderr: `Network error: ${String(e && e.message || e)}\n\nPossible causes:\n- Backend not deployed (if using proxy mode, check BACKEND_URL)\n- Cloudflare Pages Function failed to bundle\n- Piston API rate-limited or offline\n\nFix: Check browser console (F12) > Network tab for /api/run request.`,
-        compile_error: '',
-        durationMs: +(performance.now() - t0).toFixed(1),
+        const exitCode=data.status?parseInt(data.status,10):0;
+        return { success:exitCode===0, stage:'run', stdout:data.program_output||'', stderr:data.program_error||'', compile_error:'', exit_code:exitCode, mode:'wandbox-direct', compiler:comp };
+      }catch(e){ continue; }
+    }
+    return null;
+  }
+
+  async function tryJudge0Direct(code, stdin){
+    // Try public Judge0 CE without key first, then fallback
+    const publicEndpoints=[
+      'https://ce.judge0.com',
+      // RapidAPI requires key, skip unless env var
+    ];
+    const envJudge0 = (window.__env && window.__env.JUDGE0_API_URL) || '';
+    const endpoints=envJudge0?[envJudge0]:publicEndpoints;
+    for(const base of endpoints){
+      try{
+        const url=`${base.replace(/\/+$/,'')}/submissions?base64_encoded=false&wait=true`;
+        const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_code:code,language_id:54,stdin:stdin||''})});
+        const text=await res.text(); let data; try{data=JSON.parse(text);}catch{continue;}
+        if(!res.ok) continue;
+        const stdout=data.stdout||''; const stderr=data.stderr||''; const compileOutput=data.compile_output||'';
+        const statusId=data.status?.id;
+        if(statusId===6 || (compileOutput&&compileOutput.trim())){
+          return { success:false, stage:'compile', compile_error:compileOutput||stderr||'Compilation failed', stdout, stderr, mode:'judge0-direct' };
+        }
+        const isSuccess=statusId===3;
+        return { success:isSuccess, stage:'run', stdout, stderr, compile_error:'', exit_code:isSuccess?0:(statusId||1), timed_out:statusId===5, mode:'judge0-direct' };
+      }catch(e){ continue; }
+    }
+    return null;
+  }
+
+  async function run(){
+    if(running) return;
+    running=true;
+    els.runBtn.disabled=true;
+    els.runBtn.classList.add('running');
+    els.runBtn.classList.remove('success','failed');
+    const origLabel=els.runLabel.textContent;
+    els.runLabel.innerHTML='<span class="spinner"></span> ⏳ Compiling...';
+    els.statusMsg.textContent='⏳ Compiling...';
+    els.statusTime.textContent='— ms'; els.timeChip.textContent='— ms';
+    if(els.buildProgress){ els.buildProgress.style.display='block'; els.buildBar.style.width='30%'; }
+    const code=editor.getValue();
+    const stdin=els.stdin.value;
+    const cppVer=els.cppVersion ? els.cppVersion.value : '17';
+    const t0=performance.now();
+
+    try{
+      const r=await fetch(API_BASE+'/api/run',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({code, stdin, version: cppVer, cppVersion: cppVer}),
       });
-      toast('Network error: ' + (e.message || e), 'error');
-      els.statusMsg.textContent = 'Offline';
+      const text=await r.text(); let j; try{j=text?JSON.parse(text):{};}catch(parseErr){
+        const total=+(performance.now()-t0).toFixed(1);
+        console.error('[ide.ankb] non-JSON',parseErr,text.slice(0,1000));
+        renderOutput({success:false,stage:'error',stderr:`API returned invalid JSON (status ${r.status}).\nRaw: ${text.slice(0,1000)}\nParse: ${parseErr.message}`,durationMs:total,mode:'parse_error'});
+        setNetwork(false,'API returned HTML not JSON');
+        els.statusMsg.textContent='❌ API error'; return;
+      }
+      const total=+(performance.now()-t0).toFixed(1);
+      const isRetryable=r.status===503||j.retryable||/OCI runtime|crun: clone|Resource temporarily unavailable|Server busy|pids_limit|Piston 401|whitelist only|Wandbox.*429|Wandbox.*503/i.test((j.stderr||'')+(j.error||'')+(j.detail||'')+text);
+
+      if(isRetryable && !window.__retried){
+        console.warn('[ide.ankb] retryable error, trying Judge0 then Wandbox direct',j);
+        toast('Backend busy, retrying with Judge0/Wandbox...','warn',3000);
+        if(els.buildBar) els.buildBar.style.width='60%';
+        // Try Judge0 direct first (as default per user request)
+        let fallback=await tryJudge0Direct(code, stdin);
+        if(!fallback) fallback=await tryWandboxDirect(code, stdin);
+        if(fallback){
+          fallback.durationMs=total;
+          renderOutput(fallback);
+          setNetwork(true, fallback.mode||'fallback');
+          currentBackendMode=fallback.mode||'fallback';
+          if(els.statusBackend) els.statusBackend.textContent=`Mode: ${currentBackendMode}`;
+          els.statusMsg.textContent=fallback.success?'✔ Success':'❌ Failed';
+          els.statusTime.textContent=total+' ms'; els.timeChip.textContent=total+' ms';
+          els.runBtn.classList.remove('running'); els.runBtn.classList.add(fallback.success?'success':'failed');
+          els.runLabel.textContent=fallback.success?'✔ Success':'❌ Failed';
+          setTimeout(()=>{ els.runBtn.classList.remove('success','failed'); els.runLabel.textContent=origLabel; }, 3000);
+          window.__retried=true; setTimeout(()=>{window.__retried=false;},5000);
+          if(els.buildProgress) els.buildProgress.style.display='none';
+          return;
+        }
+      }
+      window.__retried=false;
+
+      if(!r.ok){
+        renderOutput({success:false,stage:'error',stderr:j.error||j.stderr||j.detail||('HTTP '+r.status+': '+text.slice(0,1000)),compile_error:j.compile_error||'',durationMs:total,mode:j.mode||currentBackendMode});
+        setNetwork(false, `HTTP ${r.status} ${j.error||''}`.trim(), j.mode);
+        toast('Request failed: '+(j.error||j.stderr||r.status),'error');
+        els.statusMsg.textContent='❌ Error';
+        els.runBtn.classList.remove('running'); els.runBtn.classList.add('failed'); els.runLabel.textContent='❌ Failed';
+      } else {
+        j.durationMs=j.durationMs??total;
+        renderOutput(j);
+        currentBackendMode=j.mode||currentBackendMode;
+        if(els.statusBackend) els.statusBackend.textContent=`Mode: ${currentBackendMode}`;
+        setNetwork(true, `Connected via ${currentBackendMode}`, j.mode);
+        if(j.success){
+          els.statusMsg.textContent='✔ Success';
+          toast('Run completed in '+j.durationMs+' ms ['+(j.mode||'')+']','ok',2000);
+          els.runBtn.classList.add('success'); els.runLabel.textContent='✔ Success';
+        } else if(j.timed_out){ els.statusMsg.textContent='⏳ TLE'; toast('Time limit exceeded','warn'); els.runBtn.classList.add('failed'); els.runLabel.textContent='❌ TLE'; }
+        else if(j.stage==='compile'){ els.statusMsg.textContent='❌ Compile Error'; toast('Compilation error','error'); els.runBtn.classList.add('failed'); els.runLabel.textContent='❌ Compile Error'; }
+        else { els.statusMsg.textContent='💥 Runtime'; toast('Runtime error exit '+ (j.exit_code??'?'),'warn'); els.runBtn.classList.add('failed'); els.runLabel.textContent='💥 Failed'; }
+        els.statusTime.textContent=j.durationMs+' ms'; els.timeChip.textContent=j.durationMs+' ms';
+        setTimeout(()=>{ els.runBtn.classList.remove('success','failed','running'); els.runLabel.textContent=origLabel; }, 2500);
+      }
+    }catch(e){
+      setNetwork(false, e.message, 'offline');
+      renderOutput({success:false,stage:'error',stderr:`Network error: ${String(e&&e.message||e)}\n\n- Piston 401 whitelist, Wandbox may 429, Judge0 recommended\n- Check F12 > Network > /api/run`,durationMs:+(performance.now()-t0).toFixed(1)});
+      toast('Network error: '+(e.message||e),'error'); els.statusMsg.textContent='🔴 Offline';
+      els.runBtn.classList.remove('running'); els.runBtn.classList.add('failed'); els.runLabel.textContent='❌ Offline';
     } finally {
-      running = false;
-      els.runBtn.disabled = false;
-      els.runLabel.textContent = origLabel;
+      running=false; els.runBtn.disabled=false;
+      if(els.buildProgress){ els.buildBar.style.width='100%'; setTimeout(()=>{ if(els.buildProgress) els.buildProgress.style.display='none'; els.buildBar.style.width='0%'; }, 500); }
     }
   }
 
-  function setNetwork(ok) {
-    els.netDot.style.background = ok ? 'var(--green)' : 'var(--red)';
-    els.netDot.style.boxShadow = `0 0 8px ${ok ? 'var(--green)' : 'var(--red)'}`;
-    els.netLabel.textContent = ok ? 'Connected' : 'Offline';
+  function setNetwork(ok, msg, mode){
+    if(mode) currentBackendMode=mode;
+    if(els.statusBackend) els.statusBackend.textContent=`Mode: ${currentBackendMode||'—'}`;
+    if(!els.connBadge) return;
+    if(ok===true){
+      els.connBadge.className='badge online';
+      els.netLabel.textContent='🟢 Online';
+      if(els.connTooltip) els.connTooltip.textContent=`Connected via ${currentBackendMode||'backend'}\nBackend: ${currentBackendMode}\n${msg||''}\nClick to re-check`;
+    } else if(ok==='connecting'){
+      els.connBadge.className='badge connecting';
+      els.netLabel.textContent='🟡 Connecting...';
+      if(els.connTooltip) els.connTooltip.textContent=`Connecting...\n${msg||''}`;
+    } else {
+      els.connBadge.className='badge offline';
+      els.netLabel.textContent='🔴 Offline';
+      if(els.connTooltip) els.connTooltip.textContent=`Backend unavailable\nMode: ${currentBackendMode}\nError: ${msg||'Unknown'}\nFix:\n- Deploy backend: docker-compose up -d\n- Or set JUDGE0_API_URL\n- Or wait for Wandbox`;
+    }
   }
 
-  /* ---------------- Editor ---------------- */
+  function downloadFile(){
+    const code=editor?editor.getValue():'';
+    const blob=new Blob([code],{type:'text/x-c++src'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download='main.cpp'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    toast('Downloaded main.cpp','ok',1500);
+  }
 
-  function bindEditor(monaco) {
-    defineTheme(monaco);
+  function openFile(file){
+    const reader=new FileReader();
+    reader.onload=(e)=>{
+      const text=e.target.result;
+      if(editor){ editor.setValue(text); toast('Opened '+file.name,'ok',1500); }
+      if(els.fileName) els.fileName.textContent=file.name;
+      if(els.tabFile) els.tabFile.textContent=file.name;
+      localStorage.setItem('ide.ankb:lastFileName', file.name);
+    };
+    reader.readAsText(file);
+  }
 
-    editor = monaco.editor.create(els.editor, {
-      value: defaultTemplate,
-      language: 'cpp',
-      theme: THEME,
-      fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-      fontLigatures: true,
-      fontSize: 14,
-      lineHeight: 22,
-      minimap: { enabled: true, scale: 1, renderCharacters: false },
-      scrollBeyondLastLine: false,
-      smoothScrolling: true,
-      cursorBlinking: 'phase',
-      cursorSmoothCaretAnimation: 'on',
-      tabSize: 4,
-      insertSpaces: true,
-      renderWhitespace: 'selection',
-      renderLineHighlight: 'all',
-      roundedSelection: true,
-      padding: { top: 12, bottom: 12 },
-      scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, useShadows: false },
-      automaticLayout: true,
-      fixedOverflowWidgets: true,
-      suggestOnTriggerCharacters: true,
-      quickSuggestions: { other: true, comments: false, strings: false },
-      bracketPairColorization: { enabled: true },
-      guides: { bracketPairs: true, indentation: true },
-      'semanticHighlighting.enabled': true,
+  function bindEditor(monaco){
+    defineTheme(monaco,'ide-dark');
+    defineTheme(monaco,'github-dark');
+    const theme=localStorage.getItem('ide.ankb:theme')||'ide-dark';
+    const cppVer=localStorage.getItem('ide.ankb:cppVersion')||'23';
+
+    editor=monaco.editor.create(els.editor,{
+      value:defaultTemplate,
+      language:'cpp',
+      theme: theme,
+      fontFamily:'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+      fontLigatures:true,
+      fontSize:14,
+      lineHeight:22,
+      minimap:{enabled:true,scale:1,renderCharacters:false},
+      scrollBeyondLastLine:false,
+      smoothScrolling:true,
+      cursorBlinking:'phase',
+      cursorSmoothCaretAnimation:'on',
+      tabSize:4,
+      insertSpaces:true,
+      renderWhitespace:'selection',
+      renderLineHighlight:'all',
+      roundedSelection:true,
+      padding:{top:12,bottom:12},
+      scrollbar:{verticalScrollbarSize:10,horizontalScrollbarSize:10,useShadows:false},
+      automaticLayout:true,
+      fixedOverflowWidgets:true,
+      suggestOnTriggerCharacters:true,
+      quickSuggestions:{other:true,comments:false,strings:false},
+      bracketPairColorization:{enabled:true},
+      guides:{bracketPairs:true,indentation:true},
+      'semanticHighlighting.enabled':true,
+      stickyScroll:{enabled:true},
+      // Glassmorphism hint
     });
 
-    editor.onDidChangeCursorPosition((e) => {
-      els.statusCursor.textContent = `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
-    });
-    editor.onDidChangeModelContent(() => {
-      const dirty = editor.getModel().getValue() !== defaultTemplate;
-      els.fileName.textContent = dirty ? '● main.cpp' : 'main.cpp';
-      els.tabFile.textContent = dirty ? '● main.cpp' : 'main.cpp';
+    // Restore theme selector
+    if(els.themeSelect){ els.themeSelect.value=theme; els.themeSelect.addEventListener('change',(e)=>{ const t=e.target.value; monaco.editor.setTheme(t); localStorage.setItem('ide.ankb:theme',t); toast('Theme: '+t,'ok',1200); }); }
+    if(els.cppVersion){ els.cppVersion.value=cppVer; els.langChip.textContent='C++'+cppVer; els.statusLang.textContent='C++'+cppVer; els.cppVersion.addEventListener('change',(e)=>{ const v=e.target.value; localStorage.setItem('ide.ankb:cppVersion',v); if(els.langChip) els.langChip.textContent='C++'+v; if(els.statusLang) els.statusLang.textContent='C++'+v; toast('C++ standard: C++'+v,'ok',1200); }); }
+
+    editor.onDidChangeCursorPosition((e)=>{ els.statusCursor.textContent=`Ln ${e.position.lineNumber}, Col ${e.position.column}`; });
+    editor.onDidChangeModelContent(()=>{
+      const dirty=editor.getModel().getValue()!==defaultTemplate;
+      els.fileName.textContent=dirty?'● main.cpp':'main.cpp';
+      els.tabFile.textContent=dirty?'● main.cpp':'main.cpp';
+      // Auto Save
+      clearTimeout(window.__autoSaveTimer);
+      window.__autoSaveTimer=setTimeout(()=>{
+        try{
+          localStorage.setItem('ide.ankb:code', editor.getValue());
+          localStorage.setItem('ide.ankb:stdin', els.stdin.value);
+          if(els.autoSaveChip){ els.autoSaveChip.textContent='Auto Save ✓ '+new Date().toLocaleTimeString(); setTimeout(()=>{ els.autoSaveChip.textContent='Auto Save ✓'; },2000); }
+        }catch(_){}
+      }, 800);
     });
 
-    setTimeout(() => {
-      try { editor.getAction('editor.action.formatDocument').run(); } catch (_) {}
-    }, 50);
+    // Restore auto saved code
+    try{
+      const savedCode=localStorage.getItem('ide.ankb:code');
+      const savedStdin=localStorage.getItem('ide.ankb:stdin');
+      if(savedCode && savedCode.trim().length>10){ editor.setValue(savedCode); toast('Restored auto-saved code','ok',1500); }
+      if(savedStdin!==null) els.stdin.value=savedStdin;
+    }catch(_){}
 
+    setTimeout(()=>{ try{ editor.getAction('editor.action.formatDocument').run(); }catch(_){} },50);
     editor.addCommand(monaco.KeyCode.F9, run);
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, run);
+    // Command Palette
+    editor.addCommand(monaco.KeyCode.F1, ()=>{ editor.getAction('editor.action.quickCommand').run(); });
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyP, ()=>{ editor.getAction('editor.action.quickCommand').run(); });
 
-    window.addEventListener('keydown', (ev) => {
-      if (ev.key === 'F9') { ev.preventDefault(); run(); }
-    });
+    window.addEventListener('keydown',(ev)=>{ if(ev.key==='F9'){ ev.preventDefault(); run(); } });
 
+    // Top bar
     els.runBtn.addEventListener('click', run);
-    els.resetBtn.addEventListener('click', () => {
-      if (editor.getValue() !== defaultTemplate &&
-          !confirm('Reset to the default template? Your code will be lost.')) return;
-      editor.setValue(defaultTemplate);
-      toast('Template restored', 'ok', 1500);
+    if(els.resetBtn) els.resetBtn.addEventListener('click',()=>{ if(editor.getValue()!==defaultTemplate && !confirm('Reset to default template?')) return; editor.setValue(defaultTemplate); toast('Template restored','ok',1500); });
+    if(els.formatBtn) els.formatBtn.addEventListener('click',()=>{ try{ editor.getAction('editor.action.formatDocument').run(); }catch(_){} });
+    if(els.closeTab) els.closeTab.addEventListener('click',()=>{ if(!confirm('Clear editor?')) return; editor.setValue(''); });
+    if(els.clearStdin) els.clearStdin.addEventListener('click',()=>{ els.stdin.value=''; els.stdin.focus(); localStorage.setItem('ide.ankb:stdin',''); });
+    if(els.clearOut) els.clearOut.addEventListener('click',()=>{ renderOutput(null); });
+    if(els.downloadBtn) els.downloadBtn.addEventListener('click', downloadFile);
+    if(els.sideDownload) els.sideDownload.addEventListener('click', downloadFile);
+    if(els.openFileBtn) els.openFileBtn.addEventListener('click',()=>{ els.openFileInput.click(); });
+    if(els.sideOpenFile) els.sideOpenFile.addEventListener('click',()=>{ els.openFileInput.click(); });
+    if(els.openFileInput) els.openFileInput.addEventListener('change',(e)=>{ const f=e.target.files[0]; if(f) openFile(f); e.target.value=''; });
+
+    // File menu
+    if(els.menuFile) els.menuFile.addEventListener('click',()=>{ 
+      const choice=prompt('File: 1=Open (Ctrl+O), 2=Download (Ctrl+S), 3=Reset');
+      if(choice==='1') els.openFileInput.click();
+      else if(choice==='2') downloadFile();
+      else if(choice==='3' && confirm('Reset?')) editor.setValue(defaultTemplate);
     });
-    els.formatBtn.addEventListener('click', () => {
-      try { editor.getAction('editor.action.formatDocument').run(); } catch (_) {}
-    });
-    els.closeTab.addEventListener('click', () => {
-      if (!confirm('Clear the editor?')) return;
-      editor.setValue('');
-    });
-    els.clearStdin.addEventListener('click', () => { els.stdin.value = ''; els.stdin.focus(); });
-    els.clearOut.addEventListener('click', () => { renderOutput(null); });
 
     setupGutter();
 
-    const guard = window.IDE_GUARD || window.IDE_SECURITY;
-    if (guard) {
+    const guard=window.IDE_GUARD||window.IDE_SECURITY;
+    if(guard){
       guard.setActions({
-        run: () => run(),
-        format: () => {
-          try { editor.getAction('editor.action.formatDocument').run(); } catch (_) {}
+        run:()=>run(),
+        format:()=>{ try{ editor.getAction('editor.action.formatDocument').run(); }catch(_){} },
+        reset:()=>{ if(editor.getValue()!==defaultTemplate && !confirm('Reset?')) return; editor.setValue(defaultTemplate); toast('Template restored','ok',1500); },
+        clearInput:()=>{ els.stdin.value=''; els.stdin.focus(); },
+        clearOutput:()=>renderOutput(null),
+        openFile:()=>{ els.openFileInput.click(); },
+        download:()=>{ downloadFile(); },
+        copyOutput:()=>{
+          const text=els.output.innerText.replace(/\n+$/,'');
+          if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(()=>toast('Output copied','ok',1200),()=>fallbackCopy(text)); }
+          else fallbackCopy(text);
         },
-        reset: () => {
-          if (editor.getValue() !== defaultTemplate &&
-              !confirm('Reset to the default template? Your code will be lost.')) return;
-          editor.setValue(defaultTemplate);
-          toast('Template restored', 'ok', 1500);
-        },
-        clearInput: () => { els.stdin.value = ''; els.stdin.focus(); },
-        clearOutput: () => renderOutput(null),
-        copyOutput: () => {
-          const text = els.output.innerText.replace(/\n+$/, '');
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(
-              () => toast('Output copied', 'ok', 1200),
-              () => fallbackCopy(text)
-            );
-          } else {
-            fallbackCopy(text);
-          }
-        },
-        about: () => {
-          alert(
-            'Online IDE — C++\n' +
-            'Editor: Monaco 0.45.0\n' +
-            'Engine: Node.js + g++ 14 / Piston fallback\n' +
-            'Limits: 2s timeout, 256MB RAM, 1MB output\n' +
-            '© ' + new Date().getFullYear()
-          );
-        },
+        about:()=>{ alert('ide.ankb — C++ Online IDE\nEditor: Monaco 0.45.0\nEngine: Node.js + g++ 14 / Judge0 (default) / Piston (401) / Wandbox fallback\nFeatures: Auto Save, Minimap, Theme switch, C++20/23 selector, Download/Open\n© '+new Date().getFullYear()+' ide.ankb'); },
       });
-      guard.onDevToolsChange((open) => {
-        if (open) {
-          setNetwork(false);
-          els.statusMsg.textContent = 'DevTools open';
-        } else {
-          setNetwork(true);
-          els.statusMsg.textContent = 'Ready';
-        }
-      });
+      guard.onDevToolsChange((open)=>{ if(open){ setNetwork(false,'DevTools open','—'); els.statusMsg.textContent='DevTools open'; } else { setNetwork(true,'Ready',currentBackendMode); els.statusMsg.textContent='Ready'; } });
     }
+
+    // Connection check retry on badge click
+    if(els.connBadge) els.connBadge.addEventListener('click',()=>{ setNetwork('connecting','Checking...'); ping(); });
   }
 
-  function fallbackCopy(text) {
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      toast('Output copied', 'ok', 1200);
-    } catch (e) {
-      toast('Copy failed', 'error', 2000);
-    }
+  function fallbackCopy(text){
+    try{
+      const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); toast('Output copied','ok',1200);
+    }catch(e){ toast('Copy failed','error',2000); }
   }
 
-  function setupGutter() {
-    const workarea = document.querySelector('.workarea');
-    let dragging = false;
-    els.gutter.addEventListener('mousedown', (e) => {
-      dragging = true;
-      document.body.style.cursor = 'col-resize';
-      e.preventDefault();
+  function setupGutter(){
+    const workarea=document.querySelector('.workarea'); if(!workarea||!els.gutter) return;
+    let dragging=false;
+    els.gutter.addEventListener('mousedown',(e)=>{ dragging=true; document.body.style.cursor='col-resize'; e.preventDefault(); });
+    window.addEventListener('mousemove',(e)=>{
+      if(!dragging) return;
+      const total=workarea.getBoundingClientRect().width;
+      const x=e.clientX-workarea.getBoundingClientRect().left;
+      const leftPct=Math.max(0.2,Math.min(0.85,x/total));
+      workarea.style.gridTemplateColumns=`${leftPct*100}% 8px 1fr`;
+      if(editor) editor.layout();
+      localStorage.setItem('ide.ankb:split', leftPct);
     });
-    window.addEventListener('mousemove', (e) => {
-      if (!dragging) return;
-      const total = workarea.getBoundingClientRect().width;
-      const x = e.clientX - workarea.getBoundingClientRect().left;
-      const leftPct = Math.max(0.2, Math.min(0.85, x / total));
-      workarea.style.gridTemplateColumns = `${leftPct * 100}% 8px 1fr`;
-      if (editor) editor.layout();
-    });
-    window.addEventListener('mouseup', () => {
-      dragging = false;
-      document.body.style.cursor = '';
-    });
+    window.addEventListener('mouseup',()=>{ dragging=false; document.body.style.cursor=''; });
+    // Restore split
+    try{ const saved=parseFloat(localStorage.getItem('ide.ankb:split')); if(!isNaN(saved)&&saved>0.2&&saved<0.85){ workarea.style.gridTemplateColumns=`${saved*100}% 8px 1fr`; } }catch(_){}
   }
 
-  async function ping() {
-    try {
-      const r = await fetch(API_BASE + '/api/health', { cache: 'no-store' });
-      const text = await r.text();
-      let ok = r.ok;
-      try {
-        const j = text ? JSON.parse(text) : {};
-        ok = ok && (j.ok !== false);
-      } catch (_) {
-        // If health returns non-JSON, treat as not ok but don't crash
-        ok = false;
-      }
-      setNetwork(ok);
-    } catch (_) { setNetwork(false); }
+  async function ping(){
+    setNetwork('connecting','Pinging /api/health...');
+    try{
+      const r=await fetch(API_BASE+'/api/health',{cache:'no-store'});
+      const text=await r.text(); let j; try{j=text?JSON.parse(text):{};}catch{j={};}
+      const ok=r.ok && (j.ok!==false);
+      const mode=j.mode||'unknown';
+      const backend=j.backend||j.judge0||'';
+      setNetwork(ok, `${mode} ${backend?`(${backend})`:''}`, mode);
+      if(els.statusBackend) els.statusBackend.textContent=`Mode: ${mode}`;
+      currentBackendMode=mode;
+    }catch(_){ setNetwork(false,'Failed to fetch /api/health','offline'); }
   }
 
-  (async function main() {
-    setNetwork(true);
-    ping(); setInterval(ping, 15000);
-
-    defaultTemplate = await fetchTemplate();
-    try {
-      const monaco = await loadMonaco();
-      bindEditor(monaco);
-      els.statusMsg.textContent = 'Ready';
-    } catch (e) {
-      els.output.innerHTML =
-        '<div class="stderr">Failed to load Monaco Editor: ' +
-        escapeHtml(String(e && e.message || e)) +
-        '</div>';
-      toast('Failed to load editor', 'error', 5000);
+  (async function main(){
+    setNetwork('connecting','Initializing...'); ping(); setInterval(ping,15000);
+    defaultTemplate=await fetchTemplate();
+    try{
+      const monaco=await loadMonaco(); bindEditor(monaco); els.statusMsg.textContent='Ready';
+      // Auto Save chip
+      if(els.autoSaveChip) els.autoSaveChip.textContent='Auto Save ✓';
+    }catch(e){
+      els.output.innerHTML='<div class="stderr">Failed to load Monaco: '+escapeHtml(String(e&&e.message||e))+'</div>';
+      toast('Failed to load editor','error',5000);
     }
   })();
 })();

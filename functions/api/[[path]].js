@@ -73,7 +73,7 @@ function corsPreflight() {
 
 // Judge0 CE fallback
 async function tryJudge0(code, stdin, env) {
-  const judge0Url = (env.JUDGE0_API_URL || env.JUDGE0_URL || '').replace(/\/+$/, '');
+  const judge0Url = (env.JUDGE0_API_URL || env.JUDGE0_URL || 'https://ce.judge0.com').replace(/\/+$/, '');
   if (!judge0Url) return { skipped: true };
 
   const languageId = parseInt(env.JUDGE0_LANGUAGE_ID || '54', 10); // 54 = C++ GCC 9.2.0 (C++17)
@@ -240,7 +240,7 @@ export async function onRequest(context) {
   if (request.method === 'OPTIONS') return corsPreflight();
 
   const backendUrl = (env.BACKEND_URL || '').replace(/\/+$/, '');
-  const judge0Url = (env.JUDGE0_API_URL || '').replace(/\/+$/, '');
+  const judge0Url = (env.JUDGE0_API_URL || 'https://ce.judge0.com').replace(/\/+$/, '');
   const pistonUrl = (env.PISTON_API_URL || PISTON_API).replace(/\/+$/, '');
 
   try {

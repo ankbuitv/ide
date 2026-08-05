@@ -40,7 +40,7 @@ function jsonResponse(data, status = 200) {
 }
 
 async function tryJudge0(code, stdin, env) {
-  const judge0Url = (env.JUDGE0_API_URL || env.JUDGE0_URL || '').replace(/\/+$/, '');
+  const judge0Url = (env.JUDGE0_API_URL || env.JUDGE0_URL || 'https://ce.judge0.com').replace(/\/+$/, '');
   if (!judge0Url) return { skipped: true };
   const languageId = parseInt(env.JUDGE0_LANGUAGE_ID || '54', 10);
   const apiKey = env.JUDGE0_API_KEY || '';
@@ -113,7 +113,7 @@ export default {
     }
 
     const backendUrl = (env.BACKEND_URL||'').replace(/\/+$/,'');
-    const judge0Url = (env.JUDGE0_API_URL||'').replace(/\/+$/,'');
+    const judge0Url = (env.JUDGE0_API_URL||'https://ce.judge0.com').replace(/\/+$/,'');
     const pistonUrl = (env.PISTON_API_URL||PISTON_API).replace(/\/+$/,'');
 
     if (pathname.startsWith('/api/')) {
