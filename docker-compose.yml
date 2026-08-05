@@ -1,0 +1,28 @@
+services:
+  ide:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: online-ide:latest
+    container_name: online-ide
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: production
+      PORT: "8080"
+    # Keep writes inside a tmpfs to avoid filling the host disk with /tmp/ide-*
+    tmpfs:
+      - /tmp:size=256M
+    # A bit of hard memory cap; Node's V8 + g++ are not super chatty.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1024M
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8080/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s

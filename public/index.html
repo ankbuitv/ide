@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Online IDE — C++</title>
+    <meta name="description" content="A fast, dark, VS Code–style online IDE for C++." />
+    <meta name="theme-color" content="#0d1117" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%231f6feb'/><text x='50%25' y='58%25' text-anchor='middle' font-family='monospace' font-size='34' font-weight='700' fill='white'>%26gt;_</text></svg>" />
+
+    <!-- Monaco: load via the AMD loader from the official CDN. The `onload`
+         callback in the script tag at the bottom of the body triggers
+         `window.__monacoReady()` so our app knows the editor is available. -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mono-icons@1.9.0/iconfont/icons.css" />
+    <style>
+      :root {
+        --bg-0: #0d1117;
+        --bg-1: #161b22;
+        --bg-2: #1c2128;
+        --bg-3: #21262d;
+        --border: #30363d;
+        --border-2: #3a4148;
+        --text: #c9d1d9;
+        --text-dim: #8b949e;
+        --text-mute: #6e7681;
+        --accent: #2f81f7;
+        --accent-2: #58a6ff;
+        --green: #3fb950;
+        --red: #f85149;
+        --yellow: #d29922;
+        --orange: #db6d28;
+        --purple: #a371f7;
+        --shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: var(--bg-0);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 13px;
+        overflow: hidden;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      /* ====== Top bar ====== */
+      .topbar {
+        display: flex;
+        align-items: center;
+        height: 44px;
+        padding: 0 12px;
+        background: linear-gradient(180deg, #161b22 0%, #131820 100%);
+        border-bottom: 1px solid var(--border);
+        user-select: none;
+        gap: 12px;
+      }
+      .brand {
+        display: flex; align-items: center; gap: 8px;
+        font-weight: 600; letter-spacing: 0.2px;
+        color: var(--text);
+      }
+      .brand .logo {
+        width: 22px; height: 22px;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: linear-gradient(135deg, #2f81f7, #a371f7);
+        color: #fff; font-weight: 800; font-size: 12px;
+        border-radius: 6px;
+        box-shadow: 0 1px 0 rgba(255,255,255,0.15) inset, 0 2px 6px rgba(47,129,247,0.4);
+      }
+      .crumbs { display: flex; align-items: center; gap: 6px; color: var(--text-dim); margin-left: 4px; }
+      .crumbs .sep { color: var(--text-mute); }
+      .crumbs .file { color: var(--text); font-family: var(--mono); }
+      .topbar .spacer { flex: 1; }
+      .badge {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 3px 8px; border-radius: 999px;
+        background: rgba(47, 129, 247, 0.12);
+        color: var(--accent-2);
+        border: 1px solid rgba(47, 129, 247, 0.3);
+        font-size: 11px; font-weight: 600;
+        letter-spacing: 0.3px;
+      }
+      .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+      .run-btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        background: linear-gradient(180deg, #2ea043, #238636);
+        color: #fff; border: 1px solid #2ea043;
+        padding: 6px 14px; height: 30px;
+        border-radius: 6px; font-weight: 600; font-size: 12px;
+        cursor: pointer;
+        box-shadow: 0 1px 0 rgba(255,255,255,0.12) inset, 0 1px 2px rgba(0,0,0,0.3);
+        transition: transform 0.05s ease, background 0.15s ease, box-shadow 0.15s ease;
+      }
+      .run-btn:hover { background: linear-gradient(180deg, #2fb44e, #2a9a3e); }
+      .run-btn:active { transform: translateY(1px); }
+      .run-btn[disabled] { opacity: 0.6; cursor: not-allowed; filter: grayscale(0.4); }
+      .run-btn .key {
+        margin-left: 4px; padding: 1px 6px; font-size: 10px;
+        background: rgba(0,0,0,0.25); border-radius: 4px;
+        border: 1px solid rgba(255,255,255,0.15);
+      }
+
+      .icon-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 30px; height: 30px;
+        background: transparent; color: var(--text-dim);
+        border: 1px solid transparent; border-radius: 6px;
+        cursor: pointer; transition: background 0.12s ease, color 0.12s ease;
+      }
+      .icon-btn:hover { background: var(--bg-3); color: var(--text); }
+      .icon-btn svg { width: 16px; height: 16px; }
+
+      /* ====== Layout ====== */
+      .app {
+        display: grid;
+        grid-template-rows: 44px 28px 1fr 22px;
+        height: 100vh;
+      }
+      .tabbar {
+        display: flex; align-items: center; gap: 4px;
+        background: var(--bg-1);
+        border-bottom: 1px solid var(--border);
+        padding: 0 8px;
+        overflow: hidden;
+      }
+      .tab {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 4px 10px; height: 22px;
+        font-size: 12px;
+        background: var(--bg-2);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-bottom: none;
+        border-top-left-radius: 6px;
+        border-top-right-radius: 6px;
+        position: relative; top: 1px;
+      }
+      .tab .lang-dot { width: 8px; height: 8px; border-radius: 50%; background: #f34b7d; box-shadow: 0 0 4px #f34b7d; }
+      .tab .close {
+        margin-left: 4px; cursor: pointer; color: var(--text-mute);
+        font-size: 14px; line-height: 1;
+      }
+      .tab .close:hover { color: var(--red); }
+
+      .workarea {
+        display: grid;
+        grid-template-columns: 1fr 8px 420px;
+        min-height: 0;
+      }
+      .gutter {
+        background: transparent;
+        cursor: col-resize;
+        position: relative;
+      }
+      .gutter::after {
+        content: '';
+        position: absolute; top: 0; bottom: 0; left: 3px; width: 2px;
+        background: var(--border);
+        transition: background 0.15s ease;
+      }
+      .gutter:hover::after { background: var(--accent); }
+
+      .editor-pane {
+        background: var(--bg-0);
+        position: relative;
+        min-width: 200px;
+      }
+      .editor-host {
+        position: absolute; inset: 0;
+      }
+
+      .right-pane {
+        display: grid;
+        grid-template-rows: 36px 1fr 36px 1fr;
+        background: var(--bg-1);
+        border-left: 1px solid var(--border);
+        min-width: 240px;
+      }
+      .pane-head {
+        display: flex; align-items: center; gap: 8px;
+        padding: 0 10px;
+        background: var(--bg-2);
+        border-bottom: 1px solid var(--border);
+        color: var(--text-dim);
+        font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px;
+        min-height: 0;
+      }
+      .pane-head .pane-title { color: var(--text); }
+      .pane-head .actions { margin-left: auto; display: flex; gap: 4px; }
+      .pane-head .chip {
+        font-size: 10px; padding: 2px 6px;
+        background: var(--bg-3); color: var(--text-dim);
+        border: 1px solid var(--border); border-radius: 4px;
+        font-weight: 500; text-transform: none; letter-spacing: 0;
+      }
+      .pane-body {
+        position: relative;
+        min-height: 0;
+        overflow: hidden;
+      }
+      .pane-body textarea {
+        position: absolute; inset: 0; width: 100%; height: 100%;
+        resize: none; border: 0; outline: none; padding: 10px 12px;
+        background: var(--bg-0); color: var(--text);
+        font-family: var(--mono); font-size: 13px; line-height: 1.55;
+        tab-size: 4;
+      }
+      .output {
+        position: absolute; inset: 0; overflow: auto;
+        padding: 10px 12px; font-family: var(--mono); font-size: 13px; line-height: 1.55;
+        white-space: pre-wrap; word-break: break-word;
+        background: var(--bg-0);
+      }
+      .output .stderr { color: var(--red); }
+      .output .meta {
+        color: var(--text-mute); font-size: 11px;
+        border-top: 1px dashed var(--border);
+        margin-top: 8px; padding-top: 6px;
+        display: flex; gap: 12px; flex-wrap: wrap;
+      }
+      .output .meta .ok { color: var(--green); }
+      .output .meta .err { color: var(--red); }
+      .output .empty {
+        color: var(--text-mute);
+        font-style: italic;
+        user-select: none;
+      }
+
+      /* ====== Status bar ====== */
+      .statusbar {
+        display: flex; align-items: center; gap: 14px;
+        background: linear-gradient(180deg, #161b22 0%, #131820 100%);
+        border-top: 1px solid var(--border);
+        padding: 0 10px; font-size: 11px; color: var(--text-dim);
+        user-select: none;
+      }
+      .statusbar .seg { display: inline-flex; align-items: center; gap: 6px; }
+      .statusbar .seg svg { width: 12px; height: 12px; }
+      .statusbar .accent { color: var(--accent-2); }
+      .statusbar .right { margin-left: auto; display: flex; gap: 14px; }
+
+      /* ====== Toast ====== */
+      .toast-host {
+        position: fixed; right: 16px; bottom: 32px; z-index: 9999;
+        display: flex; flex-direction: column; gap: 8px;
+      }
+      .toast {
+        min-width: 240px; max-width: 360px;
+        padding: 10px 12px;
+        background: var(--bg-2); color: var(--text);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent);
+        border-radius: 6px;
+        box-shadow: var(--shadow);
+        font-size: 12px;
+        animation: slideIn 0.18s ease;
+      }
+      .toast.error { border-left-color: var(--red); }
+      .toast.ok { border-left-color: var(--green); }
+      .toast.warn { border-left-color: var(--yellow); }
+      @keyframes slideIn { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+      /* ====== Spinner ====== */
+      .spinner {
+        width: 12px; height: 12px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+        display: inline-block;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      /* ====== Custom context menu ====== */
+      #ctx-menu {
+        position: fixed;
+        z-index: 10000;
+        min-width: 240px;
+        padding: 6px;
+        background: var(--bg-2);
+        border: 1px solid var(--border-2);
+        border-radius: 8px;
+        box-shadow: var(--shadow);
+        font-family: var(--sans);
+        font-size: 12px;
+        color: var(--text);
+        animation: ctxIn 0.08s ease-out;
+      }
+      @keyframes ctxIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: none; } }
+      #ctx-menu ul { list-style: none; margin: 0; padding: 0; }
+      #ctx-menu li.ctx-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 6px 8px;
+        border-radius: 5px;
+        cursor: pointer;
+        user-select: none;
+        outline: none;
+      }
+      #ctx-menu li.ctx-item:hover,
+      #ctx-menu li.ctx-item:focus { background: var(--bg-3); }
+      #ctx-menu li.ctx-item.disabled {
+        color: var(--text-mute);
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+      #ctx-menu li.ctx-item.danger { color: #ff8b8b; }
+      #ctx-menu li.ctx-item.danger:hover,
+      #ctx-menu li.ctx-item.danger:focus { background: rgba(248, 81, 73, 0.12); }
+      #ctx-menu li.ctx-item .ctx-ico {
+        width: 16px; height: 16px;
+        display: inline-flex; align-items: center; justify-content: center;
+        color: var(--accent-2);
+        flex: 0 0 16px;
+      }
+      #ctx-menu li.ctx-item.danger .ctx-ico { color: var(--red); }
+      #ctx-menu li.ctx-item .ctx-ico svg { width: 14px; height: 14px; }
+      #ctx-menu li.ctx-item .ctx-text { flex: 1; }
+      #ctx-menu li.ctx-item .ctx-sc {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--text-mute);
+        background: var(--bg-1);
+        padding: 1px 6px;
+        border-radius: 4px;
+        border: 1px solid var(--border);
+      }
+      #ctx-menu li.ctx-header {
+        font-size: 10px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.8px;
+        color: var(--text-mute);
+        padding: 6px 8px 4px;
+        cursor: default;
+        border-radius: 0;
+      }
+      #ctx-menu li.ctx-header:hover { background: transparent; }
+      #ctx-menu li.ctx-sep {
+        height: 1px;
+        background: var(--border);
+        margin: 4px 4px;
+        list-style: none;
+        padding: 0;
+        pointer-events: none;
+      }
+
+      /* ====== DevTools warning banner ====== */
+      #dt-warning {
+        position: fixed;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 9998;
+        display: flex; align-items: center; gap: 10px;
+        background: linear-gradient(180deg, #2d1a1a 0%, #1d1116 100%);
+        border: 1px solid #5b1f1f;
+        border-left: 3px solid var(--red);
+        color: #ffd7d7;
+        padding: 8px 12px 8px 10px;
+        border-radius: 8px;
+        box-shadow: var(--shadow);
+        font-size: 12px;
+        max-width: 90vw;
+        animation: ctxIn 0.15s ease;
+      }
+      #dt-warning svg { width: 16px; height: 16px; color: var(--red); flex: 0 0 16px; }
+      #dt-warning b { color: #fff; }
+      #dt-warning button {
+        background: transparent;
+        color: #ffd7d7;
+        border: 1px solid #5b1f1f;
+        border-radius: 4px;
+        padding: 2px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        margin-left: 4px;
+      }
+      #dt-warning button:hover { background: rgba(248, 81, 73, 0.15); }
+
+      /* ====== Selection block on chrome (not the editor) ====== */
+      .no-select {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+
+      /* ====== Responsive ====== */
+      @media (max-width: 900px) {
+        .workarea { grid-template-columns: 1fr; grid-template-rows: 1fr 8px 1fr; }
+        .right-pane { border-left: 0; border-top: 1px solid var(--border); }
+        .gutter::after { left: 0; right: 0; top: 3px; height: 2px; width: auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <!-- Top bar -->
+      <header class="topbar no-select">
+        <div class="brand">
+          <span class="logo">›_</span>
+          <span>Online&nbsp;IDE</span>
+        </div>
+        <div class="crumbs" aria-hidden="true">
+          <span>workspace</span><span class="sep">/</span>
+          <span class="file" id="fileName">main.cpp</span>
+        </div>
+        <span class="badge"><span class="dot" id="netDot"></span><span id="netLabel">Connected</span></span>
+
+        <div class="spacer"></div>
+
+        <button class="icon-btn" id="formatBtn" title="Format (Shift+Alt+F)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h7"/><path d="m14 14 5 5"/><path d="m19 14-5 5"/></svg>
+        </button>
+        <button class="icon-btn" id="resetBtn" title="Reset to default template">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+        </button>
+        <button class="run-btn" id="runBtn" title="Run (F9)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8V4z"/></svg>
+          <span id="runLabel">Run</span>
+          <span class="key">F9</span>
+        </button>
+      </header>
+
+      <!-- Tabs -->
+      <div class="tabbar no-select" role="tablist">
+        <div class="tab" role="tab">
+          <span class="lang-dot"></span>
+          <span id="tabFile">main.cpp</span>
+          <span class="close" id="closeTab" title="Discard (clear editor)">×</span>
+        </div>
+      </div>
+
+      <!-- Work area: editor + gutter + right pane -->
+      <main class="workarea">
+        <section class="editor-pane" aria-label="Code editor">
+          <div class="editor-host" id="editor"></div>
+        </section>
+        <div class="gutter" id="gutter" role="separator" aria-orientation="vertical"></div>
+        <aside class="right-pane" aria-label="Input and Output">
+          <div class="pane-head">
+            <span class="pane-title">Input (stdin)</span>
+            <span class="actions">
+              <button class="icon-btn" id="clearStdinBtn" title="Clear">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6 18 20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              </button>
+            </span>
+          </div>
+          <div class="pane-body">
+            <textarea id="stdin" spellcheck="false" placeholder="5
+1 2 3 4 5"></textarea>
+          </div>
+          <div class="pane-head">
+            <span class="pane-title">Output</span>
+            <span class="actions">
+              <span class="chip" id="timeChip">— ms</span>
+              <button class="icon-btn" id="clearOutBtn" title="Clear output">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6 18 20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              </button>
+            </span>
+          </div>
+          <div class="pane-body">
+            <div class="output" id="output"><div class="empty">// Run your code to see the output here</div></div>
+          </div>
+        </aside>
+      </main>
+
+      <!-- Status bar -->
+      <footer class="statusbar no-select">
+        <span class="seg accent">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
+          C++
+        </span>
+        <span class="seg" id="statusCursor">Ln 1, Col 1</span>
+        <span class="seg" id="statusLang">UTF-8</span>
+        <div class="right">
+          <span class="seg" id="statusMsg">Ready</span>
+          <span class="seg" id="statusTime">— ms</span>
+        </div>
+      </footer>
+    </div>
+
+    <div class="toast-host" id="toastHost" aria-live="polite"></div>
+
+    <!-- Optional config (injected by CI; defines window.IDE_API_BASE). -->
+    <script src="/config.js" defer></script>
+
+    <!-- Guard: custom context menu, devtools detection, key blocker. -->
+    <script src="/guard.js" defer></script>
+
+    <!-- Monaco loader: AMD. We pin a specific version for stability. -->
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+    <script src="/app.js" defer></script>
+  </body>
+</html>
