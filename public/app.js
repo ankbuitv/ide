@@ -1,14 +1,16 @@
 /* ============================================================
- * Online IDE — Frontend Controller
+ * Online IDE — Frontend Controller (Cloudflare Pages fix)
+ * Fixes:
+ * - fetch /api/* uses text() + JSON.parse with try/catch to avoid
+ *   "Unexpected end of JSON input" crash on static deploy
+ * - Friendly error UI explaining deployment options
+ * - Robust against 404 HTML responses from Pages without Functions
  * ============================================================ */
 (function () {
   'use strict';
 
   /* ---------------- Config & state ---------------- */
 
-  // If the page is served on a different origin than the API, point this
-  // at your backend. With the Docker compose setup, frontend and backend
-  // share an origin so we can just use a relative path.
   const API_BASE = (window.IDE_API_BASE || '').replace(/\/+$/, '');
 
   const els = {
@@ -38,6 +40,31 @@
   let defaultTemplate = '';
   let running = false;
 
+  const FALLBACK_TEMPLATE = `#include <bits/stdc++.h>
+using namespace std;
+#define ll long long
+#define fors(i, a, b) for (int i = a; i < b; i++)
+
+void sub() {
+    ios_base::sync_with_stdio(false);
+    cin.tie(0); cout.tie(0);
+}
+
+void sol() {
+    int n;
+    if (!(cin >> n)) return;
+    vector<int> a(n);
+    fors(i, 0, n) cin >> a[i];
+    fors(i, 0, n) cout << a[i] << " ";
+}
+
+int main() {
+    sub();
+    sol();
+    return 0;
+}
+`;
+
   /* ---------------- Toast helpers ---------------- */
 
   function toast(message, type = 'info', timeout = 3500) {
@@ -55,7 +82,6 @@
 
   /* ---------------- Monaco loader ---------------- */
 
-  // Define a custom dark theme that matches our palette.
   const THEME = 'ide-dark';
   function defineTheme(monaco) {
     monaco.editor.defineTheme(THEME, {
@@ -100,36 +126,28 @@
     });
   }
 
-  /* ---------------- Default template fetch ---------------- */
+  /* ---------------- Default template fetch — FIX C ---------------- */
 
   async function fetchTemplate() {
     try {
-      const r = await fetch(API_BASE + '/api/template');
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const j = await r.json();
-      return j.code || '';
+      const r = await fetch(API_BASE + '/api/template', { cache: 'no-store' });
+      const text = await r.text();
+      let j;
+      try {
+        j = text ? JSON.parse(text) : {};
+      } catch (parseErr) {
+        console.warn('[ide] /api/template returned non-JSON', parseErr, text.slice(0, 500));
+        // Throw to trigger fallback template below
+        throw new Error(`API template parse error: ${parseErr.message} | body: ${text.slice(0, 200)}`);
+      }
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status}: ${j.error || text.slice(0, 200)}`);
+      }
+      return j.code || j.template || '';
     } catch (e) {
+      console.warn('[ide] fetchTemplate fallback used:', e.message);
       // Hardcoded fallback so the editor is never empty
-      return `#include <bits/stdc++.h>
-using namespace std;
-#define ll long long
-#define fors(i, a, b) for (int i = a; i < b; i++)
-
-void sub() {
-ios_base::sync_with_stdio(false);
-cin.tie(0); cout.tie(0);
-}
-
-void sol() {
-
-}
-
-int main() {
-sub();
-sol();
-return 0;
-}
-`;
+      return FALLBACK_TEMPLATE;
     }
   }
 
@@ -160,6 +178,41 @@ return 0;
       pre.className = 'stderr';
       pre.textContent = result.compile_error || result.stderr || '(no stderr)';
       h.appendChild(pre);
+      o.appendChild(h);
+    } else if (result.stage === 'error') {
+      // Friendly error UI for deployment issues
+      const h = document.createElement('div');
+      h.innerHTML = '<div style="color:#f85149;font-weight:600;margin-bottom:8px;">⚠️ Runtime error / API not reachable</div>';
+      const pre = document.createElement('div');
+      pre.className = 'stderr';
+      pre.style.whiteSpace = 'pre-wrap';
+      pre.textContent = result.stderr || result.compile_error || 'Unknown error';
+      h.appendChild(pre);
+
+      // Add helpful deployment guide if error looks like static deploy without backend
+      const guide = document.createElement('div');
+      guide.style.marginTop = '12px';
+      guide.style.padding = '10px';
+      guide.style.background = '#161b22';
+      guide.style.border = '1px solid #30363d';
+      guide.style.borderRadius = '6px';
+      guide.style.fontSize = '12px';
+      guide.style.lineHeight = '1.5';
+      guide.innerHTML = `
+        <div style="font-weight:600;color:#58a6ff;margin-bottom:6px;">💡 How to fix (Cloudflare Pages deployment):</div>
+        <div style="color:#8b949e;">
+          1. <b>Recommended:</b> Ensure <code>functions/api/[[path]].js</code> is included in repo.<br>
+             Cloudflare Dashboard → Pages → Settings → Functions → should auto-detect.<br>
+             Build output directory must be <code>public</code>, build command empty.<br><br>
+          2. <b>Piston fallback (no backend needed):</b> The included Pages Function automatically uses
+             <a href="https://emkc.org/api/v2/piston" target="_blank" style="color:#58a6ff;">Piston API</a> when <code>BACKEND_URL</code> is not set.<br><br>
+          3. <b>Self-hosted Docker backend:</b> Deploy <code>backend/</code> somewhere, then set env var in Cloudflare Pages:<br>
+             <code>BACKEND_URL=https://your-backend.com</code><br>
+             Pages Function will proxy <code>/api/*</code> to it.
+        </div>
+      `;
+      h.appendChild(guide);
+
       o.appendChild(h);
     } else {
       const out = result.stdout || '';
@@ -192,11 +245,12 @@ return 0;
       ${result.exit_code != null ? `<span>exit: ${escapeHtml(String(result.exit_code))}</span>` : ''}
       ${result.timed_out ? '<span class="err">timed out (2s)</span>' : ''}
       ${result.signal ? `<span>signal: ${escapeHtml(String(result.signal))}</span>` : ''}
+      ${result.mode ? `<span>mode: ${escapeHtml(String(result.mode))}</span>` : ''}
     `;
     o.appendChild(meta);
   }
 
-  /* ---------------- Run ---------------- */
+  /* ---------------- Run — FIX C ---------------- */
 
   async function run() {
     if (running) return;
@@ -218,27 +272,56 @@ return 0;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, stdin }),
       });
-      const j = await r.json();
+
+      const text = await r.text();
+      let j;
+      try {
+        j = text ? JSON.parse(text) : {};
+      } catch (parseErr) {
+        const total = +(performance.now() - t0).toFixed(1);
+        console.error('[ide] /api/run returned non-JSON', parseErr, text.slice(0, 1000));
+        renderOutput({
+          success: false,
+          stage: 'error',
+          stderr: `API returned invalid JSON (status ${r.status}). This usually happens when deploying only static files to Cloudflare Pages without Pages Functions.\n\n` +
+                  `Raw response (first 1000 chars):\n${text.slice(0, 1000)}\n\n` +
+                  `Fix:\n` +
+                  `- Ensure functions/api/[[path]].js exists in repo and Cloudflare Pages detects Functions\n` +
+                  `- Build output directory = public, Build command = (empty)\n` +
+                  `- Optional: Set BACKEND_URL env var to your Node.js backend (https://your-backend.com)\n` +
+                  `- Fallback uses Piston API (https://emkc.org) automatically if no backend set\n\n` +
+                  `Parse error: ${parseErr.message}`,
+          compile_error: '',
+          durationMs: total,
+          mode: 'parse_error',
+        });
+        setNetwork(false);
+        toast('API returned invalid JSON — check Cloudflare Functions deployment', 'error', 6000);
+        els.statusMsg.textContent = 'API error';
+        return;
+      }
+
       const total = +(performance.now() - t0).toFixed(1);
 
       if (!r.ok) {
         renderOutput({
           success: false,
           stage: 'error',
-          stderr: j.error || ('HTTP ' + r.status),
-          compile_error: '',
+          stderr: j.error || j.stderr || ('HTTP ' + r.status + ': ' + text.slice(0, 500)),
+          compile_error: j.compile_error || '',
           durationMs: total,
+          mode: j.mode || undefined,
         });
         setNetwork(false);
-        toast('Request failed: ' + (j.error || r.status), 'error');
+        toast('Request failed: ' + (j.error || j.stderr || r.status), 'error');
         els.statusMsg.textContent = 'Error';
       } else {
         j.durationMs = j.durationMs ?? total;
         renderOutput(j);
         setNetwork(true);
         if (j.success) {
-          els.statusMsg.textContent = 'Run completed';
-          toast('Run completed in ' + j.durationMs + ' ms', 'ok', 2000);
+          els.statusMsg.textContent = 'Run completed' + (j.mode ? ` (${j.mode})` : '');
+          toast('Run completed in ' + j.durationMs + ' ms' + (j.mode ? ` [${j.mode}]` : ''), 'ok', 2000);
         } else if (j.timed_out) {
           els.statusMsg.textContent = 'Timed out';
           toast('Execution exceeded 2s timeout', 'warn');
@@ -256,7 +339,8 @@ return 0;
       setNetwork(false);
       renderOutput({
         success: false, stage: 'error',
-        stderr: String(e && e.message || e), compile_error: '',
+        stderr: `Network error: ${String(e && e.message || e)}\n\nPossible causes:\n- Backend not deployed (if using proxy mode, check BACKEND_URL)\n- Cloudflare Pages Function failed to bundle\n- Piston API rate-limited or offline\n\nFix: Check browser console (F12) > Network tab for /api/run request.`,
+        compile_error: '',
         durationMs: +(performance.now() - t0).toFixed(1),
       });
       toast('Network error: ' + (e.message || e), 'error');
@@ -308,32 +392,26 @@ return 0;
       'semanticHighlighting.enabled': true,
     });
 
-    // Wire status bar
     editor.onDidChangeCursorPosition((e) => {
       els.statusCursor.textContent = `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
     });
-    // Track dirty filename indicator
     editor.onDidChangeModelContent(() => {
       const dirty = editor.getModel().getValue() !== defaultTemplate;
       els.fileName.textContent = dirty ? '● main.cpp' : 'main.cpp';
       els.tabFile.textContent = dirty ? '● main.cpp' : 'main.cpp';
     });
 
-    // Auto-format hint
     setTimeout(() => {
       try { editor.getAction('editor.action.formatDocument').run(); } catch (_) {}
     }, 50);
 
-    // F9 = run, Ctrl/Cmd+Enter = run too
     editor.addCommand(monaco.KeyCode.F9, run);
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, run);
 
-    // Allow F9 even when the editor doesn't have focus
     window.addEventListener('keydown', (ev) => {
       if (ev.key === 'F9') { ev.preventDefault(); run(); }
     });
 
-    // Top-bar buttons
     els.runBtn.addEventListener('click', run);
     els.resetBtn.addEventListener('click', () => {
       if (editor.getValue() !== defaultTemplate &&
@@ -351,12 +429,11 @@ return 0;
     els.clearStdin.addEventListener('click', () => { els.stdin.value = ''; els.stdin.focus(); });
     els.clearOut.addEventListener('click', () => { renderOutput(null); });
 
-    // Resizable gutter
     setupGutter();
 
-    // Register actions with the guard so the right-click menu can call them.
-    if (window.IDE_GUARD) {
-      window.IDE_GUARD.setActions({
+    const guard = window.IDE_GUARD || window.IDE_SECURITY;
+    if (guard) {
+      guard.setActions({
         run: () => run(),
         format: () => {
           try { editor.getAction('editor.action.formatDocument').run(); } catch (_) {}
@@ -384,13 +461,13 @@ return 0;
           alert(
             'Online IDE — C++\n' +
             'Editor: Monaco 0.45.0\n' +
-            'Engine: Node.js + g++ 14\n' +
+            'Engine: Node.js + g++ 14 / Piston fallback\n' +
             'Limits: 2s timeout, 256MB RAM, 1MB output\n' +
             '© ' + new Date().getFullYear()
           );
         },
       });
-      window.IDE_GUARD.onDevToolsChange((open) => {
+      guard.onDevToolsChange((open) => {
         if (open) {
           setNetwork(false);
           els.statusMsg.textContent = 'DevTools open';
@@ -418,8 +495,6 @@ return 0;
     }
   }
 
-  /* ---------------- Gutter resize ---------------- */
-
   function setupGutter() {
     const workarea = document.querySelector('.workarea');
     let dragging = false;
@@ -434,7 +509,6 @@ return 0;
       const x = e.clientX - workarea.getBoundingClientRect().left;
       const leftPct = Math.max(0.2, Math.min(0.85, x / total));
       workarea.style.gridTemplateColumns = `${leftPct * 100}% 8px 1fr`;
-      // Monaco listens to resize via its own observer, but if not:
       if (editor) editor.layout();
     });
     window.addEventListener('mouseup', () => {
@@ -443,16 +517,21 @@ return 0;
     });
   }
 
-  /* ---------------- Health ping ---------------- */
-
   async function ping() {
     try {
       const r = await fetch(API_BASE + '/api/health', { cache: 'no-store' });
-      setNetwork(r.ok);
+      const text = await r.text();
+      let ok = r.ok;
+      try {
+        const j = text ? JSON.parse(text) : {};
+        ok = ok && (j.ok !== false);
+      } catch (_) {
+        // If health returns non-JSON, treat as not ok but don't crash
+        ok = false;
+      }
+      setNetwork(ok);
     } catch (_) { setNetwork(false); }
   }
-
-  /* ---------------- Boot ---------------- */
 
   (async function main() {
     setNetwork(true);

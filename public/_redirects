@@ -1,0 +1,8 @@
+# Cloudflare Pages Redirects
+# API routes are handled by functions/api/[[path]].js — no redirect needed, but keep explicit 200 to prevent SPA fallback
+
+/api/*  /api/:splat  200
+
+# Optional: SPA fallback for client-side routing (if you add routes later)
+# If a file does not exist, serve index.html. Static assets take precedence automatically.
+/*  /index.html  200

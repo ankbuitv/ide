@@ -1,14 +1,20 @@
 /* ============================================================
- * Online IDE — Guard
+ * Online IDE — Security (formerly guard.js)
  * ------------------------------------------------------------
  * Deterrent layer against casual inspection:
  *   - Custom right-click context menu
  *   - Blocks common devtools/view-source shortcuts
- *   - DevTools-open detection via dimension polling
+ *   - DevTools-open detection via dimension polling (size heuristic only)
  *   - Selection/copy disabled on the chrome (not the editor)
  *
  * NOTE: this is a deterrent, not a real security boundary.
  * Anything sent to the browser can be modified by the user.
+ *
+ * Fixes applied for Cloudflare Pages:
+ *   - Renamed from guard.js (blocked by ERR_BLOCKED_BY_CLIENT filters)
+ *   - Removed unstable tricks: console.log('%c', new Image()) and debugger;
+ *   - Only kept window.outerWidth/innerWidth size heuristic
+ *   - Wrapped isDevToolsOpen() in try/catch to avoid spam in Workers env
  * ============================================================ */
 (function () {
   'use strict';
@@ -22,34 +28,26 @@
   let dtListener = null;       // (state) => void  — set by app.js
 
   function isDevToolsOpen() {
-    // 1) Window-size heuristic — works on desktop browsers
-    const widthDiff  = (window.outerWidth  || 0) - (window.innerWidth  || 0);
-    const heightDiff = (window.outerHeight || 0) - (window.innerHeight || 0);
-    // docked thresholds
-    if (widthDiff > 160 || heightDiff > 200) return true;
-    // 2) console.log detection — works once
     try {
-      const before = new Date();
-      // eslint-disable-next-line no-console
-      console.log('%c', new Image());
-      const after = new Date();
-      if (after - before > 60) return true; // toString trick stalls when devtools is open
-    } catch (_) {}
-    // 3) debugger trap — pauses the page when devtools is open
-    try {
-      const t = new Date();
-      // eslint-disable-next-line no-debugger
-      debugger;
-      if (new Date() - t > 100) return true;
-    } catch (_) {}
-    return false;
+      // Only size heuristic — stable across browsers and Cloudflare Workers
+      const widthDiff  = (window.outerWidth  || 0) - (window.innerWidth  || 0);
+      const heightDiff = (window.outerHeight || 0) - (window.innerHeight || 0);
+      // docked thresholds
+      if (widthDiff > 160 || heightDiff > 200) return true;
+      return false;
+    } catch (e) {
+      // In case outerWidth/innerWidth not available (e.g., Cloudflare Workers preview)
+      if (DEBUG) console.warn('[security] isDevToolsOpen error', e);
+      return false;
+    }
   }
 
   function ensureBanner(open) {
-    if (open && !dtBanner) {
-      dtBanner = document.createElement('div');
-      dtBanner.id = 'dt-warning';
-      dtBanner.innerHTML = `
+    try {
+      if (open && !dtBanner) {
+        dtBanner = document.createElement('div');
+        dtBanner.id = 'dt-warning';
+        dtBanner.innerHTML = `
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
           <line x1="12" y1="9"  x2="12" y2="13"/>
@@ -58,48 +56,46 @@
         <span><b>DevTools detected.</b> Please close it to avoid losing your work.</span>
         <button id="dt-dismiss" type="button">Dismiss</button>
       `;
-      document.body.appendChild(dtBanner);
-      // dismiss just hides the banner; if devtools is still open it re-appears next tick
-      dtBanner.querySelector('#dt-dismiss').addEventListener('click', () => {
+        document.body.appendChild(dtBanner);
+        dtBanner.querySelector('#dt-dismiss').addEventListener('click', () => {
+          dtBanner.style.display = 'none';
+        });
+      } else if (!open && dtBanner) {
         dtBanner.style.display = 'none';
-      });
-    } else if (!open && dtBanner) {
-      dtBanner.style.display = 'none';
-    } else if (open && dtBanner) {
-      dtBanner.style.display = '';
-    }
+      } else if (open && dtBanner) {
+        dtBanner.style.display = '';
+      }
+    } catch (_) {}
   }
 
   function tick() {
-    const open = isDevToolsOpen();
-    if (open !== dtWarn) {
-      dtWarn = open;
-      ensureBanner(open);
-      try { if (dtListener) dtListener(open); } catch (_) {}
-      if (DEBUG) console.log('[guard] devtools =', open);
+    try {
+      const open = isDevToolsOpen();
+      if (open !== dtWarn) {
+        dtWarn = open;
+        ensureBanner(open);
+        try { if (dtListener) dtListener(open); } catch (_) {}
+        if (DEBUG) console.log('[security] devtools =', open);
+      }
+    } catch (e) {
+      if (DEBUG) console.warn('[security] tick error', e);
     }
   }
 
   /* ---------------- Keyboard blocker ---------------- */
 
-  // We block these on the whole document EXCEPT inside Monaco (Monaco
-  // already eats most of them). We allow F9 (run) and Ctrl/Cmd+Enter (run).
   const BLOCKED = [
-    // F12
     { key: 'F12' },
-    // View source
     { key: 'u', ctrl: true, shift: false, alt: false, meta: false },
-    // DevTools toggles
     { key: 'i', ctrl: true, shift: true,  alt: false, meta: false },
     { key: 'j', ctrl: true, shift: true,  alt: false, meta: false },
     { key: 'c', ctrl: true, shift: true,  alt: false, meta: false },
-    { key: 'k', ctrl: true, shift: true,  alt: false, meta: false }, // Firefox
+    { key: 'k', ctrl: true, shift: true,  alt: false, meta: false },
     { key: 's', ctrl: true, shift: false, alt: false, meta: false },
     { key: 'p', ctrl: true, shift: false, alt: false, meta: false },
     { key: 'a', ctrl: true, shift: false, alt: false, meta: false },
-    { key: 's', ctrl: true, shift: true,  alt: false, meta: false }, // save-as on some browsers
-    { key: 'F7' }, // Firefox caret browsing
-    // Print
+    { key: 's', ctrl: true, shift: true,  alt: false, meta: false },
+    { key: 'F7' },
     { key: 'p', ctrl: true, shift: false, alt: false, meta: false },
   ];
 
@@ -116,7 +112,6 @@
       if (b.shift  !== undefined && b.shift  !== ev.shiftKey)  continue;
       if (b.alt    !== undefined && b.alt    !== ev.altKey)    continue;
       if (b.meta   !== undefined && b.meta   !== ev.metaKey)   continue;
-      // No modifier specified means "any" — already matched by exact key.
       return true;
     }
     return false;
@@ -126,7 +121,7 @@
     if (blocked(ev)) {
       ev.preventDefault();
       ev.stopPropagation();
-      if (DEBUG) console.log('[guard] blocked key', ev.key);
+      if (DEBUG) console.log('[security] blocked key', ev.key);
       return false;
     }
   }
@@ -134,8 +129,8 @@
   /* ---------------- Custom context menu ---------------- */
 
   let menuEl = null;
-  let menuActions = null;     // {run, format, reset, clearInput, clearOutput, copyOutput, about}
-  let currentTarget = null;   // the element under the cursor when opened
+  let menuActions = null;
+  let currentTarget = null;
 
   function closeMenu() {
     if (menuEl) {
@@ -201,7 +196,6 @@
 
     const ul = document.createElement('ul');
 
-    // Header showing where the user clicked
     const where = (() => {
       const t = target;
       if (!t) return 'Workspace';
@@ -266,7 +260,6 @@
     document.body.appendChild(menuEl);
     position(x, y);
 
-    // focus the first item for keyboard nav
     requestAnimationFrame(() => {
       const first = menuEl.querySelector('li.ctx-item:not(.header):not(.disabled)');
       if (first) first.focus();
@@ -281,7 +274,6 @@
   }
 
   function onContextMenu(ev) {
-    // Always suppress the browser default and show our menu.
     ev.preventDefault();
     ev.stopPropagation();
     openMenu(ev.clientX, ev.clientY, ev.target);
@@ -290,26 +282,15 @@
 
   /* ---------------- Public API ---------------- */
 
-  window.IDE_GUARD = {
-    /**
-     * Register actions so the context menu can invoke them.
-     */
-    setActions(actions) {
-      menuActions = actions;
-    },
-    /**
-     * Subscribe to devtools state changes.
-     */
+  // Keep both names for backward compat
+  const API = {
+    setActions(actions) { menuActions = actions; },
     onDevToolsChange(fn) { dtListener = fn; },
-    /**
-     * Programmatically close the menu.
-     */
     closeMenu,
-    /**
-     * Whether devtools is currently believed to be open.
-     */
     isDevToolsOpen() { return dtWarn; },
   };
+  window.IDE_GUARD = API;
+  window.IDE_SECURITY = API;
 
   /* ---------------- Wire up ---------------- */
 
@@ -322,9 +303,6 @@
   window.addEventListener('resize', closeMenu);
   window.addEventListener('scroll', closeMenu, true);
 
-  // Devtools polling — every 800ms is a good balance between detection
-  // speed and CPU usage. The banner stays in place once shown until either
-  // devtools closes or the user dismisses it.
   setInterval(tick, 800);
   tick();
 })();
