@@ -1,0 +1,23 @@
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  X-XSS-Protection: 1; mode=block
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; connect-src 'self' https://emkc.org https://*.piston.rs http://localhost:* https://localhost:*; img-src 'self' data:;
+
+/security.js
+  Cache-Control: public, max-age=86400
+  Content-Type: application/javascript; charset=utf-8
+
+/app.js
+  Cache-Control: public, max-age=3600
+  Content-Type: application/javascript; charset=utf-8
+
+/config.js
+  Cache-Control: public, max-age=300
+  Content-Type: application/javascript; charset=utf-8
+
+/api/*
+  Access-Control-Allow-Origin: *
+  Cache-Control: no-store
