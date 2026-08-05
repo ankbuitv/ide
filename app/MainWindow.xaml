@@ -5,7 +5,10 @@
         Background="#0d1117" Foreground="#c9d1d9"
         WindowStartupLocation="CenterScreen"
         Icon="pack://application:,,,/logo.ico"
-        Closing="Window_Closing">
+        Closing="Window_Closing"
+        Loaded="Window_Loaded"
+        WindowStyle="SingleBorderWindow"
+        ResizeMode="CanResize">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="44"/>
@@ -35,7 +38,7 @@
         </Border>
 
         <!-- TopBar -->
-        <Border Grid.Row="0" Grid.Column="1" Background="#161b22" BorderBrush="#30363d" BorderThickness="0,0,0,1">
+        <Border Grid.Row="0" Grid.Column="1" Background="#161b22" BorderBrush="#30363d" BorderThickness="0,0,0,1" MouseLeftButtonDown="TopBar_MouseDown">
             <DockPanel Margin="12,0">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Image Source="pack://application:,,,/logo.png" Width="28" Height="28" Margin="0,0,10,0"/>

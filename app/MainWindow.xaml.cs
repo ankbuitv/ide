@@ -412,6 +412,38 @@ namespace IdeAnkb
         private void ClearOutput_Click(object sender, RoutedEventArgs e) { OutputBox.Text = "// Run your code to see output here"; }
         private void CloseTab_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) { if (MessageBox.Show("Clear editor?", "ide.ankb", MessageBoxButton.YesNo) == MessageBoxResult.Yes) EditorBox.Clear(); }
 
+        private void TopBar_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            try
+            {
+                if (e.LeftButton == System.Windows.Input.MouseButtonState.Pressed)
+                {
+                    // If clicking on a button/combobox inside topbar, don't drag
+                    if (e.OriginalSource is System.Windows.Controls.Button || e.OriginalSource is System.Windows.Controls.ComboBox || e.OriginalSource is System.Windows.Controls.ComboBoxItem)
+                        return;
+                    DragMove();
+                }
+            }
+            catch { }
+        }
+
+        private void Window_Loaded(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Ensure default template is set (fix empty editor bug)
+                if (string.IsNullOrWhiteSpace(EditorBox.Text))
+                {
+                    EditorBox.Text = "#include <bits/stdc++.h>\nusing namespace std;\n\n#define fors(i, a, b) for (int i = a; i < b; i++)\n\n#define ll long long\n\nvoid sub() {\n    ios_base::sync_with_stdio(false);\n    cin.tie(0); cout.tie(0);\n}\n\nvoid sol() {\n   cout << \"Hello world!\";\n}\n\nint main() {\n    sub();\n    sol();\n    return 0;\n}\n";
+                }
+                UpdateCursor();
+                UpdateLangChip();
+                CheckLocalCompiler();
+                try { InitDiscordRpc(); } catch { }
+            }
+            catch { }
+        }
+
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
             try { discordClient?.ClearPresence(); discordClient?.Deinitialize(); discordClient?.Dispose(); } catch { }
