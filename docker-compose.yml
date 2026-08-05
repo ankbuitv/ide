@@ -11,18 +11,83 @@ services:
     environment:
       NODE_ENV: production
       PORT: "8080"
-    # Keep writes inside a tmpfs to avoid filling the host disk with /tmp/ide-*
+      # Optional: point to Judge0 CE for fallback (if you run judge0 service below)
+      # JUDGE0_API_URL: http://judge0:2358
+    # Fix for OCI runtime error: crun: clone: Resource temporarily unavailable
+    # Increase pids limit from default (often 1024) to 2048 to allow concurrent g++ forks
+    pids_limit: 2048
+    # Increase mem limit to 2GB for g++ with bits/stdc++.h -O2 (needs ~700MB vmem)
+    mem_limit: 2048m
+    mem_reservation: 512m
+    cpus: 2.0
     tmpfs:
-      - /tmp:size=256M
-    # A bit of hard memory cap; Node's V8 + g++ are not super chatty.
+      - /tmp:size=512M
     deploy:
       resources:
         limits:
           cpus: "2.0"
-          memory: 1024M
+          memory: 2048M
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8080/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 30s
       timeout: 3s
       retries: 3
       start_period: 10s
+    depends_on:
+      - judge0
+    networks:
+      - ide-net
+
+  # Optional: Judge0 CE — recommended fallback after Piston 401 whitelist (2026-02-15)
+  # Judge0 is a fully open-source code execution engine with its own sandbox
+  # Run with: docker-compose up -d judge0 (will auto-pull)
+  # Then set in Cloudflare dashboard: JUDGE0_API_URL=http://your-vps-ip:2358
+  # Or set in backend env: JUDGE0_API_URL=http://judge0:2358 (inside compose network)
+  judge0:
+    image: judge0/judge0:1.13.1
+    container_name: judge0
+    restart: unless-stopped
+    ports:
+      - "2358:2358"
+    environment:
+      - REDIS_HOST=judge0-redis
+      - POSTGRES_HOST=judge0-postgres
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0
+    depends_on:
+      - judge0-postgres
+      - judge0-redis
+    networks:
+      - ide-net
+    privileged: true
+
+  judge0-postgres:
+    image: postgres:15-alpine
+    container_name: judge0-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: judge0
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0
+    volumes:
+      - judge0-postgres-data:/var/lib/postgresql/data
+    networks:
+      - ide-net
+
+  judge0-redis:
+    image: redis:7-alpine
+    container_name: judge0-redis
+    restart: unless-stopped
+    volumes:
+      - judge0-redis-data:/data
+    networks:
+      - ide-net
+
+volumes:
+  judge0-postgres-data:
+  judge0-redis-data:
+
+networks:
+  ide-net:
+    driver: bridge
