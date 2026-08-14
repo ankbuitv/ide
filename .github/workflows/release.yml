@@ -13,6 +13,10 @@ jobs:
   build-windows:
     name: Build Windows (.exe + .msi)
     runs-on: windows-latest
+    env:
+      # The `secrets` context cannot be used in step-level `if:` expressions,
+      # so we mirror it into the job env and test `env.*` instead.
+      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -31,7 +35,7 @@ jobs:
       # A real CA-issued code-signing certificate is required for Windows to stop
       # showing "Unknown publisher". See docs/WINDOWS_SIGNING.md.
       - name: Import Windows code-signing certificate
-        if: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 != '' }}
+        if: ${{ env.WINDOWS_CERTIFICATE_BASE64 != '' }}
         shell: pwsh
         env:
           CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
@@ -52,7 +56,7 @@ jobs:
           Write-Host "Signing enabled with certificate: $($certificate.Subject)"
 
       - name: Warn when Windows build is unsigned
-        if: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 == '' }}
+        if: ${{ env.WINDOWS_CERTIFICATE_BASE64 == '' }}
         shell: pwsh
         run: Write-Warning "No signing certificate configured; Windows will display 'Unknown publisher'. See docs/WINDOWS_SIGNING.md."
 
