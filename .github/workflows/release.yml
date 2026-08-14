@@ -1,4 +1,4 @@
-name: "Build & Release CP IDE"
+name: "Build & Release ide.ankb"
 
 on:
   push:
@@ -41,7 +41,7 @@ jobs:
           CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
           CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
-          $pfxPath = Join-Path $env:RUNNER_TEMP "cp-ide-signing.pfx"
+          $pfxPath = Join-Path $env:RUNNER_TEMP "ide-ankb-signing.pfx"
           [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
           $password = ConvertTo-SecureString $env:CERTIFICATE_PASSWORD -AsPlainText -Force
           $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password
@@ -67,24 +67,28 @@ jobs:
         with:
           projectPath: desktop
           tagName: v__VERSION__
-          releaseName: "CP IDE v__VERSION__"
+          releaseName: "ide.ankb v__VERSION__"
           releaseBody: |
-            ## CP IDE v__VERSION__
+            ## ide.ankb v__VERSION__
 
             ### Windows
-            - `CP-IDE_x64-setup.exe` — trình cài đặt NSIS có giao diện riêng (khuyên dùng)
-            - `CP-IDE_x64_en-US.msi` — gói MSI dành cho quản trị viên
+            - `ide.ankb_v__VERSION___x64-setup.exe` — trình cài đặt NSIS (khuyên dùng)
+            - `ide.ankb_v__VERSION___x64_en-US.msi` — gói MSI dành cho quản trị viên
 
             ### macOS
-            - `CP-IDE_aarch64.dmg` — Apple Silicon
-            - `CP-IDE_x64.dmg` — Intel
+            - `ide.ankb_aarch64.dmg` — Apple Silicon
+            - `ide.ankb_x64.dmg` — Intel
 
             ### Linux
-            - `cp-ide_amd64.AppImage` — Universal
-            - `cp-ide_amd64.deb` — Debian/Ubuntu
+            - `ide-ankb_amd64.AppImage` — Universal
+            - `ide-ankb_amd64.deb` — Debian/Ubuntu
+
+            ### Engine
+            - Có Internet → chạy bằng **Judge0 CE**
+            - Offline → chạy **native g++** (tự tìm trong Code::Blocks/MSYS2/WinLibs…, bỏ qua compiler hỏng thiếu DLL)
 
             ### Yêu cầu hệ thống
-            - **Compiler**: GCC 11+, Clang 14+, hoặc MSVC 2022
+            - **Compiler** (chỉ khi offline): GCC 11+, Clang 14+, hoặc MSVC 2022
             - **RAM**: 2GB+
             - **Disk**: 200MB
           args: --verbose
