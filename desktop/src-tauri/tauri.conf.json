@@ -1,7 +1,7 @@
 {
-  "productName": "CP IDE",
-  "version": "1.0.0",
-  "identifier": "com.ankb.cpid",
+  "productName": "ide.ankb",
+  "version": "1.1.0",
+  "identifier": "com.ankb.ide",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -11,11 +11,12 @@
   "app": {
     "windows": [
       {
-        "title": "CP IDE - Competitive Programming",
+        "title": "ide.ankb — C++ IDE",
         "width": 1400,
         "height": 900,
         "minWidth": 800,
         "minHeight": 600,
+        "maximized": true,
         "resizable": true,
         "fullscreen": false,
         "center": true,
@@ -54,7 +55,7 @@
         ],
         "displayLanguageSelector": false,
         "compression": "lzma",
-        "startMenuFolder": "CP IDE"
+        "startMenuFolder": "ide.ankb"
       },
       "allowDowngrades": false,
       "webviewInstallMode": {
@@ -80,12 +81,7 @@
     "homepage": "https://ide.ankb.qzz.io",
     "copyright": "Copyright © 2026 ankbuitv",
     "category": "DeveloperTool",
-    "shortDescription": "A fast native IDE for competitive programming.",
-    "longDescription": "CP IDE is a focused competitive programming workspace with Monaco Editor and local C++ compiler support."
-  },
-  "plugins": {
-    "shell": {
-      "open": true
-    }
+    "shortDescription": "ide.ankb — C++ IDE: Judge0 khi online, g++ nội bộ khi offline.",
+    "longDescription": "ide.ankb là một competitive programming workspace với Monaco Editor: chạy code qua Judge0 CE khi có Internet, tự động chuyển sang compiler nội bộ (tự tìm g++/Code::Blocks/MSYS2) khi offline, hỗ trợ mở nhiều file cpp/c/txt/inp/out cùng lúc."
   }
 }

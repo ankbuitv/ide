@@ -1,6 +1,6 @@
-# ⚡ CP IDE — Competitive Programming Desktop IDE
+# ide.ankb — C++ Desktop IDE
 
-Cross-platform desktop IDE for competitive programming, built with **Tauri 2 + React + TypeScript + Rust**.
+Desktop IDE for competitive programming (branded **ide.ankb**, same logo & context menu as the web version), built with **Tauri 2 + React + TypeScript + Rust**.
 
 ![Architecture](https://img.shields.io/badge/Tauri-2.0-blue)
 ![React](https://img.shields.io/badge/React-18-61dafb)
@@ -10,7 +10,7 @@ Cross-platform desktop IDE for competitive programming, built with **Tauri 2 + R
 ## 🏗️ Architecture
 
 ```
-                 CP IDE
+                ide.ankb
                    │
           ┌────────┴────────┐
           │                 │
@@ -33,23 +33,22 @@ Cross-platform desktop IDE for competitive programming, built with **Tauri 2 + R
 | **Editor** | Monaco Editor (VS Code engine) |
 | **Desktop** | Tauri 2 (WebView2/WebKitGTK) |
 | **Backend** | Rust |
-| **Terminal** | xterm.js + Native PTY |
-| **C++ Compiler** | GCC / Clang / MSVC |
+| **Online engine** | Judge0 CE (khi có Internet) |
+| **Offline engine** | g++ / clang++ / MSVC nội bộ |
 | **Database** | SQLite (rusqlite) |
 | **Config** | JSON (cross-platform) |
-| **Build** | GitHub Actions (CI/CD) |
 
 ## 📦 Features
 
-- ✅ **Monaco Editor** — Same engine as VS Code, full C++ IntelliSense
-- ✅ **Multi-compiler** — GCC, Clang, MSVC with version selector
-- ✅ **C++11/14/17/20/23** — Standard version picker
-- ✅ **Native Terminal** — PTY with xterm.js, full shell access
-- ✅ **Fast Compile** — Native compilation, no server needed
-- ✅ **Submission History** — SQLite database tracks all runs
-- ✅ **Snippets** — Common CP patterns (binary search, segtree, etc.)
-- ✅ **Test Cases** — Input/expected/actual comparison
-- ✅ **Cross-platform** — Windows, macOS, Linux
+- ✅ **Engine Auto**: có Internet → chạy bằng **Judge0 CE**; offline/lỗi mạng → tự chuyển **Native** (có thể ép tay trong menu Run)
+- ✅ **Compiler thông minh**: tự tìm g++ trong PATH → Code::Blocks → MSYS2/WinLibs/TDM/Dev-C++ → quét sâu toàn ổ; **verify bằng cách compile thử thật** nên compiler hỏng (thiếu `libgmp-10.dll`, `libgcc_s_seh-1.dll`…) bị bỏ qua, **không còn popup "System Error"**
+- ✅ **Context menu y chang bản web** — Run, Format, Reset, Open/Download, Clear/Copy Output, Reload, About — mọi item đều hoạt động
+- ✅ **Multi-file tabs** — mở nhiều file `cpp/c/h/hpp/txt/inp/out/ans...` cùng lúc; input trống thì tự lấy từ tab `.inp`, stdout đổ vào tab `.out`
+- ✅ **Menu bar hoạt động thật** — File/Edit/View/Run/Help, tất cả đều nhấn là chạy
+- ✅ **Auto maximize** khi mở app
+- ✅ **Monaco Editor** — Same engine as VS Code + C++ snippets + Format Document
+- ✅ **C++11/14/17/20/23** — Standard version picker (native), Judge0 dùng GCC 9.4 (C++17/gnu17+)
+- ✅ **Auto-save session** — mở lại app là khôi phục tabs
 
 ## 🚀 Getting Started
 
@@ -57,7 +56,7 @@ Cross-platform desktop IDE for competitive programming, built with **Tauri 2 + R
 
 - **Node.js** 18+
 - **Rust** 1.70+
-- **C++ Compiler**: GCC 11+, Clang 14+, or MSVC 2022
+- **C++ Compiler** (chỉ cần khi chạy offline): GCC 11+, Clang 14+, hoặc MSVC 2022 — app tự tìm trong `C:\Program Files\CodeBlocks\MinGW\bin`, MSYS2, ... hoặc cài nhanh: `winget install --id BrechtSanders.WinLibs.POSIX.UCRT`
 - **System libs** (Linux only): `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`
 
 #### Windows (bắt buộc dùng MSVC toolchain)
@@ -94,7 +93,7 @@ npm run tauri:build
 ```
 
 Output:
-- **Windows**: `src-tauri/target/release/bundle/msi/*.msi`
+- **Windows**: `src-tauri/target/release/bundle/nsis/ide.ankb_*_x64-setup.exe` + `bundle/msi/*.msi`
 - **macOS**: `src-tauri/target/release/bundle/dmg/*.dmg`
 - **Linux**: `src-tauri/target/release/bundle/appimage/*.AppImage`
 
@@ -103,12 +102,13 @@ Output:
 | Key | Action |
 |-----|--------|
 | `F9` / `Ctrl+Enter` | Compile & Run |
-| `Ctrl+S` | Save file |
-| `Ctrl+O` | Open file |
-| `Ctrl+Shift+P` | Command Palette |
-| `Ctrl+F` | Find |
-| `Ctrl+H` | Find & Replace |
-| `Ctrl+/` | Toggle comment |
+| `Ctrl+O` | Open file(s) |
+| `Ctrl+S` / `Ctrl+Shift+S` | Save / Save As |
+| `Ctrl+N` / `Ctrl+W` | New tab / Close tab |
+| `F11` | Fullscreen |
+| `Ctrl+Shift+P` / `F1` | Command Palette |
+| `Ctrl+F` / `Ctrl+H` | Find / Replace |
+| Chuột phải | Context menu ide.ankb (giống bản web) |
 
 ## 📁 Project Structure
 
@@ -116,33 +116,35 @@ Output:
 desktop/
 ├── src/                          # React Frontend
 │   ├── main.tsx                  # Entry point
-│   ├── App.tsx                   # Main layout
+│   ├── App.tsx                   # Main layout (tabs, engine, menus)
 │   ├── components/
-│   │   ├── Editor.tsx            # Monaco Editor wrapper
-│   │   ├── Terminal.tsx          # xterm.js terminal
+│   │   ├── Editor.tsx            # Monaco wrapper + C++ formatter
 │   │   ├── Output.tsx            # Compile/run output
+│   │   ├── ContextMenu.tsx       # Chuột phải — y chang bản web
+│   │   ├── MenuBar.tsx           # File/Edit/View/Run/Help dropdown
+│   │   ├── Terminal.tsx          # xterm.js terminal
 │   │   ├── StatusBar.tsx         # Bottom status bar
 │   │   └── Sidebar.tsx           # File explorer
-│   ├── hooks/                    # Custom React hooks
 │   ├── lib/
-│   │   └── tauri.ts             # Tauri API bridge
+│   │   ├── tauri.ts              # Tauri API bridge (native engine)
+│   │   └── judge0.ts            # Judge0 CE engine (online)
 │   ├── styles/
-│   │   ├── global.css           # Global styles
-│   │   └── App.css              # App layout styles
+│   │   ├── global.css
+│   │   └── App.css
 │   └── types/
-│       └── index.ts             # TypeScript types
+│       └── index.ts
 │
 ├── src-tauri/                   # Rust Backend
-│   ├── Cargo.toml              # Rust dependencies
-│   ├── tauri.conf.json         # Tauri configuration
-│   ├── capabilities/           # Permission config
+│   ├── Cargo.toml
+│   ├── tauri.conf.json
+│   ├── capabilities/            # Permission config
 │   └── src/
-│       ├── main.rs             # Entry point
-│       ├── lib.rs              # Tauri commands registry
-│       ├── compiler.rs         # C++ compile & run (GCC/Clang/MSVC)
-│       ├── terminal.rs         # Native PTY terminal
-│       └── database.rs         # SQLite storage
-
+│       ├── main.rs
+│       ├── lib.rs               # Commands + maximize + SetErrorMode
+│       ├── compiler.rs          # Compiler probing/verify/compile/run
+│       ├── terminal.rs          # Native PTY terminal
+│       └── database.rs          # SQLite storage
+│
 ├── package.json
 ├── vite.config.ts
 └── tsconfig.json
@@ -150,7 +152,7 @@ desktop/
 
 ## 🔧 Configuration
 
-Config file: `%APPDATA%/cp-ide/config.json` (Windows) or `~/.config/cp-ide/config.json` (Linux/macOS)
+Config file: `%APPDATA%/ide-ankb/config.json` (Windows) hoặc `~/.config/ide-ankb/config.json` (Linux/macOS)
 
 ```json
 {
@@ -170,8 +172,8 @@ Config file: `%APPDATA%/cp-ide/config.json` (Windows) or `~/.config/cp-ide/confi
 Push a tag `v*` to trigger multi-platform builds:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
 Auto-builds:

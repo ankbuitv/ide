@@ -1,12 +1,12 @@
 [package]
-name = "cp-ide-desktop"
-version = "1.0.0"
-description = "CP IDE - Competitive Programming Desktop IDE"
+name = "ide-ankb"
+version = "1.1.0"
+description = "ide.ankb — C++ desktop IDE (Judge0 online, native g++ offline)"
 authors = ["ankbuitv"]
 edition = "2021"
 
 [lib]
-name = "cp_ide_lib"
+name = "ide_ankb_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

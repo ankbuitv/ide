@@ -4,7 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#070a12" />
-    <title>CP IDE - Competitive Programming IDE</title>
+    <title>ide.ankb — C++ IDE</title>
+    <link rel="icon" type="image/png" href="/logo.png" />
     <style>
       /* This shell is inline on purpose: it is visible before the JS bundle/WebView is ready. */
       html, body { width: 100%; height: 100%; margin: 0; background: #070a12; overflow: hidden; }
@@ -29,8 +30,9 @@
         border: 1px solid rgba(125, 211, 252, .38); border-radius: 24px;
         background: linear-gradient(145deg, rgba(139,92,246,.25), rgba(34,211,238,.15));
         box-shadow: 0 0 56px rgba(124, 58, 237, .25), inset 0 0 22px rgba(255,255,255,.06);
-        animation: boot-float 1.8s ease-in-out infinite;
+        animation: boot-float 1.8s ease-in-out infinite; overflow: hidden;
       }
+      .boot-mark img { width: 100%; height: 100%; object-fit: cover; display: block; }
       .boot-mark svg { width: 52px; height: 52px; filter: drop-shadow(0 0 10px rgba(103,232,249,.35)); }
       .boot-title { font-weight: 700; font-size: 25px; letter-spacing: -.5px; }
       .boot-title span { color: #67e8f9; }
@@ -50,13 +52,10 @@
     <div id="boot-splash" role="status" aria-live="polite">
       <div class="boot-content">
         <div class="boot-mark" aria-hidden="true">
-          <svg viewBox="0 0 64 64" fill="none">
-            <path d="M25 18 11 32l14 14M39 18l14 14-14 14" stroke="#e9d5ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="m36 12-8 40" stroke="#67e8f9" stroke-width="4" stroke-linecap="round"/>
-          </svg>
+          <img src="/logo.png" alt="ide.ankb" onerror="this.outerHTML='<svg viewBox=&quot;0 0 64 64&quot; fill=&quot;none&quot;><path d=&quot;M25 18 11 32l14 14M39 18l14 14-14 14&quot; stroke=&quot;#e9d5ff&quot; stroke-width=&quot;5&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot;/><path d=&quot;m36 12-8 40&quot; stroke=&quot;#67e8f9&quot; stroke-width=&quot;4&quot; stroke-linecap=&quot;round&quot;/></svg>'" />
         </div>
-        <div class="boot-title">CP <span>IDE</span></div>
-        <div class="boot-subtitle">Competitive Programming Workspace</div>
+        <div class="boot-title">ide.<span>ankb</span></div>
+        <div class="boot-subtitle">C++ IDE — Judge0 online • g++ offline</div>
         <div class="boot-track"><div class="boot-progress"></div></div>
         <div id="boot-status">Đang khởi tạo trình soạn thảo…</div>
       </div>

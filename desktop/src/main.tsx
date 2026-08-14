@@ -21,7 +21,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("CP IDE UI crashed", error, info.componentStack);
+    console.error("ide.ankb UI crashed", error, info.componentStack);
     document.body.classList.add("app-ready");
   }
 
@@ -32,7 +32,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
           <div className="fatal-card">
             <div className="fatal-icon">&lt;/&gt;</div>
             <h1>Không thể mở giao diện</h1>
-            <p>CP IDE đã gặp lỗi khi khởi tạo. Hãy khởi động lại ứng dụng hoặc cài bản mới nhất.</p>
+            <p>ide.ankb đã gặp lỗi khi khởi tạo. Hãy khởi động lại ứng dụng hoặc cài bản mới nhất.</p>
             <pre>{this.state.error.message}</pre>
             <button onClick={() => window.location.reload()}>Thử tải lại</button>
           </div>

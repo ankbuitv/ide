@@ -42,7 +42,7 @@ export default function Terminal() {
     setTimeout(() => fitAddon.fit(), 100);
 
     // Welcome message
-    term.writeln("\x1b[1;36m⚡ CP IDE Terminal\x1b[0m");
+    term.writeln("\x1b[1;36m⚡ ide.ankb Terminal\x1b[0m");
     term.writeln("\x1b[90mNhập lệnh để chạy. Hỗ trợ: gcc, g++, make, git...\x1b[0m");
     term.writeln("");
     term.write("\x1b[32m$\x1b[0m ");

@@ -1,4 +1,4 @@
-// CP IDE - SQLite Database Module
+// ide.ankb - SQLite Database Module
 // Stores submission history, problems, test cases
 
 use rusqlite::{params, Connection};
@@ -22,7 +22,7 @@ pub struct Submission {
 fn get_db_path() -> std::path::PathBuf {
     dirs::data_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("cp-ide")
+        .join("ide-ankb")
         .join("cpide.db")
 }
 

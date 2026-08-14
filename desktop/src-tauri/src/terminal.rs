@@ -1,4 +1,4 @@
-// CP IDE - PTY Terminal Module
+// ide.ankb - PTY Terminal Module
 // Cross-platform pseudo-terminal support
 
 use std::io::Write;

@@ -1,4 +1,4 @@
-/* CP IDE — Desktop layout, matched to the ide.ankb web design */
+/* ide.ankb — Desktop layout, matched to the web design */
 
 :root {
   --bg-0: #0d1117;
@@ -541,3 +541,153 @@
   .gutter::after { left: 0; right: 0; top: 3px; height: 2px; width: auto; }
   .menu-bar, .crumbs { display: none; }
 }
+
+/* ============================================================
+ * ide.ankb — additions (v1.1.0)
+ * - Brand logo / engine badge states
+ * - Dropdown menu bar (File/Edit/View/Run/Help)
+ * - Multi-file tabs
+ * - Context menu — styles copied VERBATIM from the web version
+ * - Toasts
+ * ============================================================ */
+
+/* Brand logo (same as web) */
+.brand .logo-img {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .15) inset, 0 2px 8px rgba(0, 0, 0, .5);
+  border: 1px solid var(--border);
+  flex: 0 0 28px;
+}
+
+/* Engine badge states */
+.badge.connecting {
+  background: rgba(210, 153, 34, .12);
+  color: var(--yellow);
+  border-color: rgba(210, 153, 34, .3);
+}
+.badge.connecting .dot {
+  background: var(--yellow);
+  box-shadow: 0 0 8px var(--yellow);
+  animation: pulse 1s infinite;
+}
+.badge.offline {
+  background: rgba(248, 81, 73, .12);
+  color: var(--red);
+  border-color: rgba(248, 81, 73, .3);
+}
+.badge.offline .dot {
+  background: var(--red);
+  box-shadow: 0 0 8px var(--red);
+}
+
+/* ===== Menu bar dropdown ===== */
+.menu-wrap { position: relative; }
+.menu-item.open { background: var(--bg-3); color: var(--text); }
+.menu-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 9990;
+  min-width: 300px;
+  padding: 6px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  animation: ctxIn .08s ease-out;
+  backdrop-filter: blur(12px);
+}
+.menu-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+  user-select: none;
+  white-space: nowrap;
+}
+.menu-entry:hover { background: var(--bg-3); }
+.menu-entry.disabled { opacity: .5; cursor: not-allowed; }
+.menu-entry.danger { color: #ff8b8b; }
+.menu-entry.danger:hover { background: rgba(248, 81, 73, .12); }
+.menu-check { width: 14px; flex: 0 0 14px; text-align: center; color: var(--accent-2); font-size: 11px; }
+.menu-label { flex: 1; }
+.menu-sc {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-mute);
+  background: var(--bg-1);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+.menu-sep { height: 1px; background: var(--border); margin: 4px 6px; }
+
+/* ===== Multi-file tabs ===== */
+.tabbar { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+.tabbar::-webkit-scrollbar { height: 4px; }
+.tab { cursor: pointer; opacity: .72; transition: all .12s; flex: 0 0 auto; user-select: none; }
+.tab:hover { opacity: 1; }
+.tab.active {
+  opacity: 1;
+  background: var(--bg-0);
+  border-color: var(--border-2);
+  box-shadow: 0 -2px 0 var(--accent) inset;
+}
+.tab .tab-name { font-family: var(--mono); }
+.tab .close {
+  margin-left: 4px;
+  cursor: pointer;
+  color: var(--text-mute);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: 4px;
+}
+.tab .close:hover { color: var(--red); background: rgba(248, 81, 73, .12); }
+.tab-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+}
+.tab-add:hover { background: var(--bg-3); color: var(--text); }
+
+/* ===== Context menu — copied from the web version (public/index.html) ===== */
+#ctx-menu{position:fixed;z-index:10000;min-width:240px;padding:6px;background:var(--bg-2);border:1px solid var(--border-2);border-radius:10px;box-shadow:var(--shadow);font-family:var(--sans);font-size:12px;color:var(--text);animation:ctxIn .08s ease-out;backdrop-filter:blur(12px)}
+@keyframes ctxIn{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:none}}
+#ctx-menu ul{list-style:none;margin:0;padding:0}
+#ctx-menu li.ctx-item{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;cursor:pointer;user-select:none;outline:none}
+#ctx-menu li.ctx-item:hover,#ctx-menu li.ctx-item:focus{background:var(--bg-3)}
+#ctx-menu li.ctx-item.disabled{color:var(--text-mute);cursor:not-allowed;opacity:.55}
+#ctx-menu li.ctx-item.danger{color:#ff8b8b}
+#ctx-menu li.ctx-item.danger:hover{background:rgba(248,81,73,.12)}
+#ctx-menu li.ctx-item .ctx-ico{width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;color:var(--accent-2);flex:0 0 16px}
+#ctx-menu li.ctx-item .ctx-ico svg{width:14px;height:14px}
+#ctx-menu li.ctx-item .ctx-text{flex:1}
+#ctx-menu li.ctx-item .ctx-sc{font-family:var(--mono);font-size:10px;color:var(--text-mute);background:var(--bg-1);padding:1px 6px;border-radius:4px;border:1px solid var(--border)}
+#ctx-menu li.ctx-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-mute);padding:6px 8px 4px;cursor:default}
+#ctx-menu li.ctx-sep{height:1px;background:var(--border);margin:4px}
+#ctx-menu li.ctx-item.header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-mute);padding:6px 8px 4px;cursor:default}
+#ctx-menu li.ctx-item.header:hover{background:transparent}
+
+/* ===== Toasts (web-parity) ===== */
+.toast-host{position:fixed;right:16px;bottom:32px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{min-width:240px;max-width:380px;padding:10px 12px;background:var(--bg-2);color:var(--text);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;box-shadow:var(--shadow);font-size:12px;animation:slideIn .18s ease;backdrop-filter:blur(8px);white-space:pre-wrap}
+.toast.error{border-left-color:var(--red)}
+.toast.ok{border-left-color:var(--green)}
+.toast.warn{border-left-color:var(--yellow)}
+@keyframes slideIn{from{transform:translateY(6px);opacity:0}to{transform:none;opacity:1}}
