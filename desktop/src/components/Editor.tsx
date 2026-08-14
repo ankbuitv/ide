@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import MonacoEditor, { type OnMount } from "@monaco-editor/react";
+import type { editor, Position } from "monaco-editor";
 
 interface EditorProps {
   code: string;
@@ -20,7 +21,7 @@ export default function Editor({ code, onChange, language = "cpp" }: EditorProps
 
     // Add snippets
     monaco.languages.registerCompletionItemProvider("cpp", {
-      provideCompletionItems: (model, position) => {
+      provideCompletionItems: (model: editor.ITextModel, position: Position) => {
         const word = model.getWordUntilPosition(position);
         const range = {
           startLineNumber: position.lineNumber,

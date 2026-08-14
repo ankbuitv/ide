@@ -9,7 +9,6 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "title": "CP IDE",
     "windows": [
       {
         "title": "CP IDE - Competitive Programming",
