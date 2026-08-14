@@ -60,11 +60,23 @@ Cross-platform desktop IDE for competitive programming, built with **Tauri 2 + R
 - **C++ Compiler**: GCC 11+, Clang 14+, or MSVC 2022
 - **System libs** (Linux only): `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`
 
+#### Windows (bắt buộc dùng MSVC toolchain)
+
+Trên Windows phải dùng Rust **MSVC toolchain**, không dùng GNU toolchain
+(GNU sẽ lỗi `dlltool.exe not found` khi build `parking_lot_core`). Chạy:
+
+```bash
+rustup default stable-x86_64-pc-windows-msvc
+```
+
+và cài **Visual Studio Build Tools** với workload **"Desktop development with C++"**
+(Desktop development with C++ → MSVC v143 + Windows 10/11 SDK).
+
 ### Install
 
 ```bash
 cd desktop
-npm install
+npm ci
 ```
 
 ### Development
@@ -130,10 +142,7 @@ desktop/
 │       ├── compiler.rs         # C++ compile & run (GCC/Clang/MSVC)
 │       ├── terminal.rs         # Native PTY terminal
 │       └── database.rs         # SQLite storage
-│
-├── .github/workflows/
-│   └── release.yml             # CI/CD: Win/Mac/Linux builds
-│
+
 ├── package.json
 ├── vite.config.ts
 └── tsconfig.json
