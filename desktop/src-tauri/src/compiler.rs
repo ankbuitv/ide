@@ -258,69 +258,73 @@ fn deep_scan(_targets: &[&str]) -> Vec<String> {
     Vec::new()
 }
 
+/// Push a candidate path onto `out` after normalizing and de-duplicating
+/// (case-insensitively, so `C:\MinGW\bin\g++.EXE` and `c:\mingw\bin\g++.exe`
+/// collapse into one entry).
+fn push_unique(out: &mut Vec<String>, p: String) {
+    let norm = p.trim().trim_matches('"').to_string();
+    if !norm.is_empty() && !out.iter().any(|e| e.eq_ignore_ascii_case(&norm)) {
+        out.push(norm);
+    }
+}
+
 /// Collect every candidate for a compiler kind, best-first:
 /// PATH results → environment overrides → well-known install dirs
 /// (Code::Blocks first) → bounded deep scan.
 fn compiler_candidates(compiler: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
-    let mut push = |p: String| {
-        let norm = p.trim().trim_matches('"').to_string();
-        if !norm.is_empty() && !out.iter().any(|e| e.eq_ignore_ascii_case(&norm)) {
-            out.push(norm);
-        }
-    };
 
     match compiler {
         "gcc" => {
             for name in &["g++", "g++-15", "g++-14", "g++-13", "g++-12", "g++-11"] {
                 for p in which_paths(name) {
-                    push(p);
+                    push_unique(&mut out, p);
                 }
             }
             if let Ok(custom) = std::env::var("IDE_ANKB_GXX") {
-                push(custom);
+                push_unique(&mut out, custom);
             }
             if let Ok(custom) = std::env::var("CXX") {
-                push(custom);
+                push_unique(&mut out, custom);
             }
             for p in known_gcc_paths() {
                 if p.exists() {
-                    push(p.to_string_lossy().to_string());
+                    push_unique(&mut out, p.to_string_lossy().to_string());
                 }
             }
             if out.is_empty() {
                 for p in deep_scan(&["g++.exe"]) {
-                    push(p);
+                    push_unique(&mut out, p);
                 }
             }
         }
         "clang" => {
             for name in &["clang++", "clang++-19", "clang++-18", "clang++-17", "clang++-16"] {
                 for p in which_paths(name) {
-                    push(p);
+                    push_unique(&mut out, p);
                 }
             }
             if let Ok(custom) = std::env::var("IDE_ANKB_CLANGXX") {
-                push(custom);
+                push_unique(&mut out, custom);
             }
             for p in known_clang_paths() {
                 if p.exists() {
-                    push(p.to_string_lossy().to_string());
+                    push_unique(&mut out, p.to_string_lossy().to_string());
                 }
             }
             if out.is_empty() {
                 for p in deep_scan(&["clang++.exe"]) {
-                    push(p);
+                    push_unique(&mut out, p);
                 }
             }
         }
         "msvc" => {
             for p in which_paths("cl") {
-                push(p);
+                push_unique(&mut out, p);
             }
             for p in known_msvc_hints() {
                 if p.exists() {
-                    push(p.to_string_lossy().to_string());
+                    push_unique(&mut out, p.to_string_lossy().to_string());
                 }
             }
         }

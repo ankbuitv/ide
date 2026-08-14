@@ -21,7 +21,7 @@ fn get_default_shell() -> String {
 
 #[allow(dead_code)]
 fn init_pty(cols: u16, rows: u16) -> Result<(), String> {
-    use portable_pty::{CommandBuilder, PtySize, native_pty_system, PtySystem};
+    use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 
     let pty_system = native_pty_system();
     let pair = pty_system
