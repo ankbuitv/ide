@@ -684,15 +684,18 @@ int main() {
 
     // File menu
     if(els.menuFile) els.menuFile.addEventListener('click',()=>{
-      const choice=prompt('File (working):
-1=Open (Ctrl+O)
-2=Download (Ctrl+S)
-3=Reset template
+      const choice=prompt(`File:
+1 = Open (Ctrl+O)
+2 = Download (Ctrl+S)
+3 = Reset template
 
-For CP focus, use sidebar 📂💾');
+You can also use the sidebar icons.`);
       if(choice==='1') els.openFileInput.click();
-      else if(choice==='2'){ const name=currentFile||'main.cpp'; const blob=new Blob([files[name]||editor.getValue()],{type:'text/plain'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; a.click(); }
-      else if(choice==='3' && confirm('Reset?')){ files[currentFile]=FALLBACK_TEMPLATE; if(editor) editor.setValue(FALLBACK_TEMPLATE); saveFiles(); }
+      else if(choice==='2') downloadFile();
+      else if(choice==='3' && confirm('Reset to the default template?')){
+        if(editor) editor.setValue(defaultTemplate);
+        toast('Template restored','ok',1500);
+      }
     });
     if(els.menuEdit){
       els.menuEdit.style.opacity='0.5';
