@@ -16,14 +16,20 @@ interface EditorProps {
   code: string;
   onChange: (value: string) => void;
   language?: string;
+  /** Stable per-tab path so Monaco giữ model/undo history riêng cho từng tab. */
+  path?: string;
+  fontSize?: number;
+  minimap?: boolean;
   onCursorChange?: (line: number, col: number) => void;
+  onMountRef?: (editor: any) => void;
 }
 
-export default function Editor({ code, onChange, language = "cpp", onCursorChange }: EditorProps) {
+export default function Editor({ code, onChange, language = "cpp", path, fontSize = 14, minimap = true, onCursorChange, onMountRef }: EditorProps) {
   const editorRef = useRef<any>(null);
 
   const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    onMountRef?.(editor);
 
     // Report cursor position for the status bar
     editor.onDidChangeCursorPosition((e: any) => {
@@ -84,6 +90,50 @@ export default function Editor({ code, onChange, language = "cpp", onCursorChang
       },
     });
 
+    // Monaco's basic-languages KHÔNG kèm formatter cho C/C++ — nếu không đăng ký
+    // thì "Format Document" (menu chuột phải / menu Edit) sẽ không làm gì cả.
+    // Đăng ký 1 formatter reindent theo dấu {} để lệnh này hoạt động thật.
+    if (!(window as any).__ideAnkbCppFormatter) {
+      (window as any).__ideAnkbCppFormatter = true;
+      const reindent = (text: string): string => {
+        const out: string[] = [];
+        let depth = 0;
+        for (const rawLine of text.split("\n")) {
+          const line = rawLine.trim();
+          if (!line) {
+            out.push("");
+            continue;
+          }
+          if (line.startsWith("#")) {
+            out.push(line); // preprocessor giữ nguyên, không indent
+            continue;
+          }
+          let level = depth;
+          if (line.startsWith("}")) level = Math.max(0, level - 1);
+          if (/^(public|private|protected)\s*:/.test(line)) level = Math.max(0, depth - 1);
+          if (/^(case\b[\s\S]*|default)\s*:/.test(line)) level = Math.max(0, depth - 1);
+          out.push("    ".repeat(level) + line);
+          // Đếm {} sau khi bỏ chuỗi/comment để không lệch depth
+          const codeOnly = line
+            .replace(/\/\/.*$/, "")
+            .replace(/"(?:\\.|[^"\\])*"/g, '""')
+            .replace(/'(?:\\.|[^'\\])*'/g, "''");
+          const opens = (codeOnly.match(/{/g) || []).length;
+          const closes = (codeOnly.match(/}/g) || []).length;
+          depth = Math.max(0, depth + opens - closes);
+        }
+        return out.join("\n");
+      };
+      const provider = {
+        displayName: "ide.ankb C/C++ reindent",
+        provideDocumentFormattingEdits(model: editor.ITextModel) {
+          return [{ range: model.getFullModelRange(), text: reindent(model.getValue()) }];
+        },
+      };
+      monaco.languages.registerDocumentFormattingEditProvider("cpp", provider);
+      monaco.languages.registerDocumentFormattingEditProvider("c", provider);
+    }
+
     // Focus editor
     editor.focus();
   };
@@ -92,6 +142,7 @@ export default function Editor({ code, onChange, language = "cpp", onCursorChang
     <div className="editor-container">
       <MonacoEditor
         height="100%"
+        path={path}
         language={language}
         theme="vs-dark"
         value={code}
@@ -104,10 +155,10 @@ export default function Editor({ code, onChange, language = "cpp", onCursorChang
         onMount={handleMount}
         onChange={(value) => onChange(value || "")}
         options={{
-          fontSize: 14,
+          fontSize,
           fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace",
           fontLigatures: true,
-          minimap: { enabled: true, scale: 1 },
+          minimap: { enabled: minimap, scale: 1 },
           scrollBeyondLastLine: false,
           smoothScrolling: true,
           cursorBlinking: "phase",

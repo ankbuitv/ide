@@ -1,7 +1,7 @@
 {
-  "name": "cp-ide-desktop",
+  "name": "ide-ankb-desktop",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

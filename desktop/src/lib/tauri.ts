@@ -1,5 +1,5 @@
 /**
- * Tauri API wrappers for CP IDE
+ * Tauri API wrappers for ide.ankb
  * Bridges React frontend with Rust backend
  */
 
@@ -27,6 +27,8 @@ export interface CompileResult {
   signal?: string | null;
   compiler_used?: string;
   memory_kb?: number;
+  /** Which engine produced this result: "judge0" (online) or "native". */
+  engine?: string;
 }
 
 export interface FileInfo {
@@ -92,10 +94,21 @@ export async function readFile(path: string): Promise<string> {
 }
 
 /**
- * Open file dialog
+ * Open file dialog (single select)
  */
 export async function openFileDialog(): Promise<string | null> {
   return invoke<string | null>("open_file_dialog");
+}
+
+/**
+ * Open file dialog (multi select: cpp, c, h, txt, inp, out, ...)
+ */
+export async function openFilesDialog(): Promise<string[]> {
+  try {
+    return await invoke<string[]>("open_files_dialog");
+  } catch {
+    return [];
+  }
 }
 
 /**

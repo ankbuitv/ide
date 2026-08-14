@@ -1,8 +1,8 @@
-// CP IDE - Tauri Desktop Application
+// ide.ankb — Tauri Desktop Application
 // Main entry point
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    cp_ide_lib::run();
+    ide_ankb_lib::run();
 }

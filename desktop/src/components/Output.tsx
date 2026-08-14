@@ -8,7 +8,7 @@ interface OutputProps {
 export default function Output({ result, running }: OutputProps) {
   if (running) {
     return (
-      <div className="output info">
+      <div className="output info output-pane">
         <div className="output-loading">
           <span className="spinner dark" />
           <span>Compiling &amp; running…</span>
@@ -19,13 +19,13 @@ export default function Output({ result, running }: OutputProps) {
 
   if (!result) {
     return (
-      <div className="output">
+      <div className="output output-pane">
         <div className="empty">// Run your code (F9) to see the output here</div>
       </div>
     );
   }
 
-  const cls = result.success ? "output success" : "output error";
+  const cls = result.success ? "output success output-pane" : "output error output-pane";
 
   return (
     <div className={cls}>
@@ -64,6 +64,9 @@ export default function Output({ result, running }: OutputProps) {
         <span className={result.success ? "ok" : "err"}>
           {result.success ? "✓ Success" : "✗ Failed"}
         </span>
+        {result.engine && (
+          <span>{result.engine === "judge0" ? "🌐 Judge0" : "💻 Native"}</span>
+        )}
         <span>⏱ {result.duration_ms?.toFixed(1)} ms</span>
         {result.exit_code != null && <span>exit: {result.exit_code}</span>}
         {result.timed_out && <span className="err">⏳ Timed out</span>}

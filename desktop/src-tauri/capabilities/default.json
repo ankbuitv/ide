@@ -1,9 +1,15 @@
 {
   "identifier": "default",
-  "description": "Default capability for CP IDE",
+  "description": "Default capability for ide.ankb",
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-close",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-is-fullscreen",
     "shell:allow-open",
     "fs:default",
     "dialog:default"
