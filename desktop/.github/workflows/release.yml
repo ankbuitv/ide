@@ -1,4 +1,4 @@
-name: "Build & Release CP IDE"
+name: "Build & Release ide.ankb"
 
 on:
   push:
@@ -32,21 +32,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v__VERSION__
-          releaseName: "CP IDE v__VERSION__"
+          releaseName: "ide.ankb v__VERSION__"
           releaseBody: |
-            ## CP IDE v__VERSION__
+            ## ide.ankb v__VERSION__
 
             ### Windows
-            - `CP-IDE_x64_en-US.msi` — Installer (recommended)
-            - `CP-IDE_x64-setup.exe` — NSIS installer
+            - `ide.ankb_v__VERSION___x64_en-US.msi` — Installer (recommended)
+            - `ide.ankb_v__VERSION___x64-setup.exe` — NSIS installer
 
             ### macOS
-            - `CP-IDE_aarch64.dmg` — Apple Silicon
-            - `CP-IDE_x64.dmg` — Intel
+            - `ide.ankb_aarch64.dmg` — Apple Silicon
+            - `ide.ankb_x64.dmg` — Intel
 
             ### Linux
-            - `cp-ide_amd64.AppImage` — Universal
-            - `cp-ide_amd64.deb` — Debian/Ubuntu
+            - `ide-ankb_amd64.AppImage` — Universal
+            - `ide-ankb_amd64.deb` — Debian/Ubuntu
 
             ### Yêu cầu hệ thống
             - **Compiler**: GCC 11+, Clang 14+, hoặc MSVC 2022
