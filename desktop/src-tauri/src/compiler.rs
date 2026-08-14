@@ -51,30 +51,153 @@ fn get_std_flag(compiler: &str, version: &str) -> String {
     }
 }
 
+/// Create a Command that never flashes a console window on Windows.
+fn new_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    #[allow(unused_mut)]
+    let mut cmd = Command::new(program);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
+/// Well-known install locations of MinGW-w64 / WinLibs / MSYS2 on Windows.
+/// Users often install GCC there without adding it to PATH.
+#[cfg(target_os = "windows")]
+fn find_gcc_in_known_paths() -> Option<String> {
+    let mut candidates: Vec<std::path::PathBuf> = vec![
+        r"C:\msys64\ucrt64\bin\g++.exe".into(),
+        r"C:\msys64\mingw64\bin\g++.exe".into(),
+        r"C:\msys64\clang64\bin\g++.exe".into(),
+        r"C:\mingw64\bin\g++.exe".into(),
+        r"C:\mingw32\bin\g++.exe".into(),
+        r"C:\MinGW\bin\g++.exe".into(),
+        r"C:\TDM-GCC-64\bin\g++.exe".into(),
+        r"C:\TDM-GCC-32\bin\g++.exe".into(),
+        r"C:\Program Files\CodeBlocks\MinGW\bin\g++.exe".into(),
+        r"C:\Program Files (x86)\CodeBlocks\MinGW\bin\g++.exe".into(),
+        r"C:\Program Files (x86)\Dev-Cpp\MinGW64\bin\g++.exe".into(),
+        r"C:\Strawberry\c\bin\g++.exe".into(),
+    ];
+    if let Ok(profile) = std::env::var("USERPROFILE") {
+        let home = std::path::Path::new(&profile);
+        candidates.push(home.join(r"scoop\apps\gcc\current\bin\g++.exe"));
+        candidates.push(home.join(r"scoop\apps\mingw\current\bin\g++.exe"));
+        candidates.push(home.join(r"scoop\apps\mingw-winlibs\current\bin\g++.exe"));
+        candidates.push(home.join(r"scoop\apps\mingw-winlibs-llvm-ucrt\current\bin\g++.exe"));
+    }
+    candidates
+        .into_iter()
+        .find(|p| p.exists())
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn find_gcc_in_known_paths() -> Option<String> {
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn find_clang_in_known_paths() -> Option<String> {
+    let candidates: Vec<std::path::PathBuf> = vec![
+        r"C:\Program Files\LLVM\bin\clang++.exe".into(),
+        r"C:\msys64\clang64\bin\clang++.exe".into(),
+        r"C:\msys64\ucrt64\bin\clang++.exe".into(),
+    ];
+    candidates
+        .into_iter()
+        .find(|p| p.exists())
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn find_clang_in_known_paths() -> Option<String> {
+    None
+}
+
+fn gcc_not_found_message() -> String {
+    if cfg!(target_os = "windows") {
+        [
+            "Không tìm thấy GCC (g++) trên máy.",
+            "",
+            "Cách cài nhanh nhất — mở PowerShell và chạy:",
+            "    winget install --id BrechtSanders.WinLibs.POSIX.UCRT",
+            "sau đó KHỞI ĐỘNG LẠI CP IDE để nhận PATH mới.",
+            "",
+            "Hoặc cài MSYS2 (https://www.msys2.org) rồi chạy:",
+            "    pacman -S mingw-w64-ucrt-x86_64-gcc",
+            "",
+            "Nếu đã cài GCC rồi: thêm thư mục chứa g++.exe vào PATH",
+            "(vd: C:\\msys64\\ucrt64\\bin) rồi mở lại CP IDE.",
+        ]
+        .join("\n")
+    } else if cfg!(target_os = "macos") {
+        "Không tìm thấy GCC (g++). Cài đặt: xcode-select --install (Apple clang) hoặc brew install gcc".to_string()
+    } else {
+        "Không tìm thấy GCC (g++). Cài đặt: sudo apt install g++ (Ubuntu/Debian) hoặc sudo dnf install gcc-c++ (Fedora)".to_string()
+    }
+}
+
+fn clang_not_found_message() -> String {
+    if cfg!(target_os = "windows") {
+        [
+            "Không tìm thấy Clang (clang++) trên máy.",
+            "",
+            "Cách cài nhanh — mở PowerShell và chạy:",
+            "    winget install --id LLVM.LLVM",
+            "sau đó KHỞI ĐỘNG LẠI CP IDE để nhận PATH mới.",
+        ]
+        .join("\n")
+    } else if cfg!(target_os = "macos") {
+        "Không tìm thấy Clang (clang++). Cài đặt: xcode-select --install hoặc brew install llvm".to_string()
+    } else {
+        "Không tìm thấy Clang (clang++). Cài đặt: sudo apt install clang".to_string()
+    }
+}
+
 fn find_compiler(compiler: &str) -> Result<String, String> {
     match compiler {
         "gcc" => {
-            // Try g++ first, then g++-14, g++-13, etc.
-            for name in &["g++", "g++-14", "g++-13", "g++-12", "g++-11"] {
+            // Try g++ on PATH first, then versioned names, then known install dirs.
+            for name in &["g++", "g++-15", "g++-14", "g++-13", "g++-12", "g++-11"] {
                 if which_exists(name) {
                     return Ok(name.to_string());
                 }
             }
-            Err("Không tìm thấy GCC (g++). Cài đặt: apt install g++ hoặc brew install gcc".to_string())
+            if let Some(path) = find_gcc_in_known_paths() {
+                return Ok(path);
+            }
+            Err(gcc_not_found_message())
         }
         "clang" => {
-            for name in &["clang++", "clang++-18", "clang++-17", "clang++-16"] {
+            for name in &["clang++", "clang++-19", "clang++-18", "clang++-17", "clang++-16"] {
                 if which_exists(name) {
                     return Ok(name.to_string());
                 }
             }
-            Err("Không tìm thấy Clang (clang++). Cài đặt: apt install clang hoặc brew install llvm".to_string())
+            if let Some(path) = find_clang_in_known_paths() {
+                return Ok(path);
+            }
+            Err(clang_not_found_message())
         }
         "msvc" => {
             if which_exists("cl") {
                 Ok("cl".to_string())
             } else {
-                Err("Không tìm thấy MSVC (cl.exe). Cần Visual Studio Build Tools.".to_string())
+                Err([
+                    "Không tìm thấy MSVC (cl.exe).",
+                    "",
+                    "Cài Visual Studio Build Tools:",
+                    "    winget install --id Microsoft.VisualStudio.2022.BuildTools",
+                    "(chọn workload \"Desktop development with C++\").",
+                    "Lưu ý: cl.exe chỉ có trong PATH khi mở app từ \"Developer Command Prompt\".",
+                    "Khuyên dùng GCC (MinGW-w64) cho competitive programming.",
+                ]
+                .join("\n")
+                .to_string())
             }
         }
         _ => Err(format!("Compiler không hỗ trợ: {}", compiler)),
@@ -84,7 +207,7 @@ fn find_compiler(compiler: &str) -> Result<String, String> {
 fn which_exists(name: &str) -> bool {
     #[cfg(target_os = "windows")]
     {
-        Command::new("where")
+        new_command("where")
             .arg(name)
             .output()
             .map(|o| o.status.success())
@@ -92,7 +215,7 @@ fn which_exists(name: &str) -> bool {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        Command::new("which")
+        new_command("which")
             .arg(name)
             .output()
             .map(|o| o.status.success())
@@ -127,7 +250,7 @@ pub async fn compile_cpp(
 
     // Compile
     let compile_output = if compiler == "msvc" {
-        Command::new(&compiler_path)
+        new_command(&compiler_path)
             .args(&[
                 &std_flag,
                 "/O2",
@@ -157,7 +280,7 @@ pub async fn compile_cpp(
             }
         }
 
-        Command::new(&compiler_path)
+        new_command(&compiler_path)
             .args(&args)
             .current_dir(tmp.path())
             .output()
@@ -231,7 +354,7 @@ fn run_binary(bin_path: &std::path::Path, stdin_path: &std::path::Path, timeout_
 
     let stdin_data = std::fs::read_to_string(stdin_path).unwrap_or_default();
 
-    let mut child = match Command::new(bin_path)
+    let mut child = match new_command(bin_path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
