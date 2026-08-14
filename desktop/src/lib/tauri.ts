@@ -3,6 +3,8 @@
  * Bridges React frontend with Rust backend
  */
 
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+
 // Tauri invoke types
 export interface CompileOptions {
   code: string;
@@ -42,15 +44,10 @@ export interface GitStatus {
   untracked: string[];
 }
 
-// Tauri invoke wrapper
-async function invoke<T>(cmd: string, args?: Record<string, any>): Promise<T> {
-  // @ts-ignore - Tauri global
-  if (window.__TAURI__) {
-    // @ts-ignore
-    return window.__TAURI__.core.invoke(cmd, args);
-  }
-  // Fallback for development without Tauri
-  throw new Error(`Tauri not available. Command: ${cmd}`);
+// Use the module API instead of window.__TAURI__. Tauri 2 disables the global
+// object by default, so the old check made every native command fail in release.
+async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  return tauriInvoke<T>(cmd, args);
 }
 
 /**

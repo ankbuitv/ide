@@ -197,6 +197,26 @@
   height: 100%;
 }
 
+.editor-loading {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+}
+
+.editor-loading-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
 /* ===== RIGHT PANEL ===== */
 .right-panel {
   width: 380px;
