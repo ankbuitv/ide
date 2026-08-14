@@ -58,6 +58,20 @@ function corsPreflight() {
   });
 }
 
+function toBase64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+function fromBase64(b64) {
+  if (!b64) return '';
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
 async function tryJudge0(code, stdin, env) {
   const judge0Url = (env.JUDGE0_API_URL || env.JUDGE0_URL || 'https://ce.judge0.com').replace(/\/+$/, '');
   if (!judge0Url) return { skipped: true };
@@ -69,13 +83,15 @@ async function tryJudge0(code, stdin, env) {
     headers['X-RapidAPI-Key'] = apiKey;
     if (apiHost) headers['X-RapidAPI-Host'] = apiHost;
   }
-  const url = `${judge0Url}/submissions?base64_encoded=false&wait=true`;
+  const url = `${judge0Url}/submissions?base64_encoded=true&wait=true`;
   try {
-    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ source_code: code, language_id: languageId, stdin: stdin || '' }) });
+    const codeB64 = toBase64(code);
+    const stdinB64 = toBase64(stdin || '');
+    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ source_code: codeB64, language_id: languageId, stdin: stdinB64 }) });
     const text = await res.text(); let data; try { data = JSON.parse(text); } catch { data = null; }
-    if (!res.ok) return { error: `Judge0 ${res.status}: ${text.slice(0,2000)}`, status: res.status };
-    if (!data) return { error: `Judge0 invalid JSON: ${text.slice(0,1000)}` };
-    const stdout = data.stdout || ''; const stderr = data.stderr || ''; const compileOutput = data.compile_output || '';
+    if (!res.ok) return { error: `Judge0 ${res.status}: ${text.slice(0,500)}`, status: res.status };
+    if (!data) return { error: `Judge0 invalid JSON: ${text.slice(0,500)}` };
+    const stdout = fromBase64(data.stdout); const stderr = fromBase64(data.stderr); const compileOutput = fromBase64(data.compile_output);
     const statusId = data.status?.id;
     if (statusId === 6 || (compileOutput && compileOutput.trim())) {
       return { success: false, stage: 'compile', stdout, stderr, compile_error: compileOutput || stderr || 'Compilation failed', exit_code: statusId, mode: 'judge0', judge0Status: data.status?.description, time: data.time, memory: data.memory };
@@ -136,7 +152,7 @@ export async function onRequest(context) {
 
       return jsonResponse({
         success: false, stage: 'error',
-        stderr: `All backends failed.\n\nBackend: ${backendUrl || '(not set)'} — ${backendUrl ? '503/crun' : 'not configured'}\nJudge0: ${judge0Url} — ${judge0Result.error?.slice(0,2000)}\n\nFix:\n- Deploy Judge0: docker run -d -p 2358:2358 judge0/judge0:1.13.1\n- Set JUDGE0_API_URL=http://your-ip:2358\n- Or set BACKEND_URL to your Node backend (docker-compose up -d)\n- Code: ${code.slice(0,500)}`,
+        stderr: `Tất cả backend đều không khả dụng.\n\nJudge0: ${judge0Result.error?.slice(0,500)}\n\nVui lòng thử lại sau hoặc liên hệ admin.`,
         stdout: '', mode: 'all_failed',
       }, 502);
     }
