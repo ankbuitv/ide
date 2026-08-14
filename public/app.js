@@ -298,65 +298,139 @@ int main() {
       const h=document.createElement('div'); const rawErr=result.compile_error||result.stderr||'(no stderr)';
       const isOci=/OCI runtime error|crun: clone|Resource temporarily unavailable|fork: retry|Cannot allocate memory|pids_limit|crun/i.test(rawErr);
       if(isOci){
-        h.innerHTML='<div style="color:#f85149;font-weight:600;margin-bottom:6px;">⚠️ Container overloaded (crun clone EAGAIN)</div>';
-        const pre=document.createElement('div'); pre.className='stderr'; pre.style.whiteSpace='pre-wrap';
-        pre.textContent=rawErr+'\n\n--- Fix applied in backend ---\n- nproc 64→512, compile RAM 1GB, pids_limit 2048\n- Concurrency limit 6, auto fallback to Judge0\n\nActions:\n1. docker-compose down && up -d --build\n2. Wait 2s and Run again → auto Judge0\n3. Set JUDGE0_API_URL for stable backend';
-        h.appendChild(pre);
-        const retryBtn=document.createElement('button'); retryBtn.textContent='🔄 Retry with Judge0 CE fallback'; retryBtn.style.marginTop='10px'; retryBtn.style.padding='6px 12px'; retryBtn.style.background='#238636'; retryBtn.style.color='#fff'; retryBtn.style.border='1px solid #2ea043'; retryBtn.style.borderRadius='6px'; retryBtn.style.cursor='pointer';
+        h.innerHTML='<div style="color:#f85149;font-weight:600;margin-bottom:6px;">⚠️ Server quá tải</div>';
+        const msgDiv=document.createElement('div');
+        msgDiv.style.cssText='padding:12px;background:#161b22;border:1px solid #30363d;border-radius:8px;margin-bottom:10px;';
+        msgDiv.innerHTML='<div style="color:#ffa657;font-size:13px;margin-bottom:6px;">💬 Server đang bận, không thể compile code.</div><div style="color:#8b949e;font-size:12px;">⏱️ Đợi vài giây rồi nhấn F9 để thử lại</div>';
+        h.appendChild(msgDiv);
+        const retryBtn=document.createElement('button'); retryBtn.textContent='🔄 Thử lại'; retryBtn.style.marginTop='10px'; retryBtn.style.padding='6px 12px'; retryBtn.style.background='#238636'; retryBtn.style.color='#fff'; retryBtn.style.border='1px solid #2ea043'; retryBtn.style.borderRadius='6px'; retryBtn.style.cursor='pointer';
         retryBtn.onclick=()=>{ window.dispatchEvent(new KeyboardEvent('keydown',{key:'F9'})); };
-        h.appendChild(retryBtn); o.appendChild(h);
+        h.appendChild(retryBtn);
+        // Technical details collapsed
+        const det=document.createElement('details'); det.style.cssText='margin-top:8px;';
+        det.innerHTML=`<summary style="cursor:pointer;color:#8b949e;font-size:11px;user-select:none;">📋 Chi tiết kỹ thuật</summary><pre style="margin-top:8px;padding:8px;background:#0d1117;border:1px solid #21262d;border-radius:6px;font-size:11px;color:#8b949e;white-space:pre-wrap;max-height:150px;overflow-y:auto;">${escapeHtml(rawErr)}</pre>`;
+        h.appendChild(det);
+        o.appendChild(h);
       } else {
-        h.innerHTML='<div style="color:#f85149;font-weight:600;margin-bottom:6px;">❌ Compile Error</div>';
-        // Try to parse line numbers like main.cpp:12
-        const pre=document.createElement('div'); pre.className='stderr'; pre.style.whiteSpace='pre-wrap';
-        // Highlight file:line
-        const highlighted=rawErr.replace(/((?:main\.cpp|file|line|:)(\d+):?(\d+)?)/gi, (m)=>`→ ${m}`);
-        pre.textContent=rawErr; h.appendChild(pre);
-        // If contains main.cpp:line, make clickable to jump
+        h.innerHTML='<div style="color:#f85149;font-weight:600;margin-bottom:6px;">❌ Lỗi biên dịch (Compile Error)</div>';
+        // Parse errors and create clickable line links
         const lines=rawErr.split('\n');
+        const errorSummary=[];
+        const errorDetails=[];
         lines.forEach(l=>{
           const m=l.match(/main\.cpp:(\d+):(\d+)?/);
-          if(m && editor){
-            const jump=document.createElement('div'); jump.style.fontSize='11px'; jump.style.color='#58a6ff'; jump.style.cursor='pointer'; jump.style.marginTop='2px';
-            jump.textContent=`↳ Jump to line ${m[1]}:${m[2]||1}`;
-            jump.onclick=()=>{ if(editor){ editor.revealLineInCenter(parseInt(m[1])); editor.setPosition({lineNumber:parseInt(m[1]), column:parseInt(m[2]||1)}); editor.focus(); } };
-            h.appendChild(jump);
+          if(m){
+            const lineNum=parseInt(m[1]);
+            const colNum=parseInt(m[2]||1);
+            // Extract the actual error message (remove file path)
+            const cleanLine=l.replace(/main\.cpp:\d+:\d*:\s*/,'').trim();
+            errorSummary.push({line:lineNum,col:colNum,msg:cleanLine,raw:l});
           }
+          errorDetails.push(l);
         });
+
+        // Show summary with clickable links
+        if(errorSummary.length > 0){
+          const sumDiv=document.createElement('div');
+          sumDiv.style.cssText='padding:10px;background:#161b22;border:1px solid #30363d;border-radius:8px;margin-bottom:8px;';
+          sumDiv.innerHTML=`<div style="color:#ffa657;font-size:12px;margin-bottom:6px;">📍 Tìm thấy ${errorSummary.length} lỗi:</div>`;
+          errorSummary.forEach(e=>{
+            const jump=document.createElement('div');
+            jump.style.cssText='font-size:12px;color:#58a6ff;cursor:pointer;padding:3px 0;border-bottom:1px solid #21262d;';
+            jump.innerHTML=`<span style="color:#8b949e;">Dòng ${e.line}:${e.col}</span> — ${escapeHtml(e.msg.slice(0,120))}`;
+            jump.onclick=()=>{ if(editor){ editor.revealLineInCenter(e.line); editor.setPosition({lineNumber:e.line, column:e.col}); editor.focus(); } };
+            sumDiv.appendChild(jump);
+          });
+          h.appendChild(sumDiv);
+        } else {
+          // No line numbers found, just show raw error
+          const pre=document.createElement('div'); pre.className='stderr'; pre.style.whiteSpace='pre-wrap';
+          pre.textContent=rawErr; h.appendChild(pre);
+        }
+
+        // Technical details collapsed
+        const det=document.createElement('details'); det.style.cssText='margin-top:8px;';
+        det.innerHTML=`<summary style="cursor:pointer;color:#8b949e;font-size:11px;user-select:none;">📋 Xem đầy đủ lỗi</summary><pre style="margin-top:8px;padding:8px;background:#0d1117;border:1px solid #21262d;border-radius:6px;font-size:11px;color:#8b949e;white-space:pre-wrap;max-height:200px;overflow-y:auto;">${escapeHtml(rawErr)}</pre>`;
+        h.appendChild(det);
         o.appendChild(h);
       }
     } else if(result.stage==='error'){
-      const h=document.createElement('div'); h.innerHTML='<div style="color:#f85149;font-weight:600;margin-bottom:8px;">💥 Runtime Error / API not reachable</div>';
-      const pre=document.createElement('div'); pre.className='stderr'; pre.style.whiteSpace='pre-wrap'; pre.textContent=result.stderr||result.compile_error||'Unknown error'; h.appendChild(pre);
-      const guide=document.createElement('div'); guide.style.marginTop='12px'; guide.style.padding='10px'; guide.style.background='#161b22'; guide.style.border='1px solid #30363d'; guide.style.borderRadius='8px'; guide.style.fontSize='12px'; guide.style.lineHeight='1.5';
-      const mode=result.mode||currentBackendMode||'unknown';
-      const backendInfo=result.backend||'—';
-      guide.innerHTML=`<div style="font-weight:600;color:#58a6ff;margin-bottom:6px;">💡 Fix (ide.ankb):</div>
-        <div style="color:#8b949e;">
-          <b>Backend:</b> ${escapeHtml(mode)}<br>
-          <b>Error:</b> ${(result.stderr||'').slice(0,500)}<br><br>
-          1. <b>Judge0 CE (recommended):</b> Deploy Judge0: <code>docker run -p 2358:2358 judge0/judge0:1.13.1</code> + set <code>JUDGE0_API_URL</code><br>
-          
-          3. <b>Piston</b> 401 whitelist since 2026-02-15 — needs self-host<br>
-          4. <b>Self-host backend:</b> <code>docker-compose up -d --build</code> (pids_limit 2048, mem 2GB)<br>
-        </div>`;
-      h.appendChild(guide); o.appendChild(h);
+      const h=document.createElement('div');
+      h.innerHTML='<div style="color:#f85149;font-weight:600;margin-bottom:8px;">❌ Lỗi Runtime</div>';
+      
+      // Parse error message to make it user-friendly
+      const rawErr = result.stderr || result.compile_error || 'Unknown error';
+      let friendlyMsg = rawErr;
+      let suggestion = '';
+      
+      // Detect common error types and provide friendly messages
+      if(/OCI runtime|crun: clone|Resource temporarily unavailable/i.test(rawErr)){
+        friendlyMsg = 'Server quá tải, không thể chạy code lúc này.';
+        suggestion = '⏱️ Đợi vài giây rồi thử lại (F9)';
+      } else if(/Piston 401|whitelist/i.test(rawErr)){
+        friendlyMsg = 'Backend Piston cần whitelist, không khả dụng.';
+        suggestion = '🔧 Liên hệ admin để setup Judge0 backend';
+      } else if(/Judge0.*400|base64_encoded/i.test(rawErr)){
+        friendlyMsg = 'Lỗi encoding khi gửi code lên server.';
+        suggestion = '🔄 Đang thử lại với encoding khác...';
+      } else if(/Network error|fetch/i.test(rawErr)){
+        friendlyMsg = 'Không thể kết nối đến server.';
+        suggestion = '📡 Kiểm tra kết nối mạng và thử lại';
+      } else if(/timeout|TLE/i.test(rawErr)){
+        friendlyMsg = 'Code chạy quá thời gian cho phép (>2s).';
+        suggestion = '⚡ Tối ưu code hoặc kiểm tra vòng lặp vô hạn';
+      } else if(/memory|allocate/i.test(rawErr)){
+        friendlyMsg = 'Code sử dụng quá nhiều bộ nhớ.';
+        suggestion = '💾 Kiểm tra mảng lớn hoặc đệ quy sâu';
+      } else {
+        // Generic error - show first line only
+        friendlyMsg = rawErr.split('\n')[0].slice(0, 200);
+        suggestion = '🔍 Kiểm tra code và thử lại';
+      }
+      
+      const errDiv = document.createElement('div');
+      errDiv.style.cssText = 'padding:12px;background:#161b22;border:1px solid #30363d;border-radius:8px;margin-bottom:10px;';
+      errDiv.innerHTML = `
+        <div style="color:#ffa657;font-size:13px;margin-bottom:6px;">💬 ${escapeHtml(friendlyMsg)}</div>
+        ${suggestion ? `<div style="color:#8b949e;font-size:12px;">${suggestion}</div>` : ''}
+      `;
+      h.appendChild(errDiv);
+      
+      // Show technical details in collapsible section
+      const detailsDiv = document.createElement('details');
+      detailsDiv.style.cssText = 'margin-top:8px;';
+      detailsDiv.innerHTML = `
+        <summary style="cursor:pointer;color:#8b949e;font-size:11px;user-select:none;">📋 Chi tiết kỹ thuật (click để xem)</summary>
+        <pre style="margin-top:8px;padding:8px;background:#0d1117;border:1px solid #21262d;border-radius:6px;font-size:11px;color:#8b949e;white-space:pre-wrap;max-height:200px;overflow-y:auto;">${escapeHtml(rawErr)}</pre>
+      `;
+      h.appendChild(detailsDiv);
+      
+      o.appendChild(h);
     } else {
       const out=result.stdout||'';
       if(out.length){ const pre=document.createElement('div'); pre.className='stdout'; pre.textContent=out; o.appendChild(pre); }
-      else { const empty=document.createElement('div'); empty.className='empty'; empty.textContent='// (no stdout)'; o.appendChild(empty); }
-      if(result.stderr&&result.stderr.trim()){ const pre=document.createElement('div'); pre.className='stderr'; pre.style.marginTop='10px'; pre.textContent='[stderr]\n'+result.stderr; o.appendChild(pre); }
+      else { const empty=document.createElement('div'); empty.className='empty'; empty.textContent='// (không có output)'; o.appendChild(empty); }
+      if(result.stderr&&result.stderr.trim()){
+        const stderrDiv=document.createElement('div');
+        stderrDiv.style.cssText='margin-top:10px;';
+        stderrDiv.innerHTML='<div style="color:#ffa657;font-size:11px;margin-bottom:4px;">⚠️ Cảnh báo (stderr):</div>';
+        const pre=document.createElement('div'); pre.className='stderr'; pre.style.cssText='white-space:pre-wrap;padding:8px;background:#161b22;border:1px solid #30363d;border-radius:6px;font-size:12px;';
+        pre.textContent=result.stderr; stderrDiv.appendChild(pre);
+        o.appendChild(stderrDiv);
+      }
     }
     const meta=document.createElement('div'); meta.className='meta';
     const ok=result.success;
+    const stageLabel={'run':'Chạy','compile':'Biên dịch','error':'Lỗi'}[result.stage||'run']||(result.stage||'run');
+    const modeLabel={'judge0':'Judge0','judge0-direct':'Judge0 CE','native':'Local','all_failed':'Không có backend','judge0-oci':'Judge0 (fallback)','oci-error':'Quá tải','busy':'Bận','offline':'Offline','parse_error':'Lỗi API'}[result.mode||'']||(result.mode||'');
     meta.innerHTML=`
-      <span class="${ok?'ok':'err'}">${ok?'✅ Success':'❌ Failed'}</span>
-      <span>stage: ${escapeHtml(result.stage||'run')}</span>
-      <span>time: ${escapeHtml(String(result.durationMs??'—'))} ms</span>
-      ${result.exit_code!=null?`<span>exit: ${escapeHtml(String(result.exit_code))}</span>`:''}
-      ${result.timed_out?'<span class="err">⏳ TLE (2s)</span>':''}
-      ${result.signal?`<span>signal: ${escapeHtml(String(result.signal))}</span>`:''}
-      ${result.mode?`<span>🔧 ${escapeHtml(String(result.mode))}</span>`:''}
+      <span class="${ok?'ok':'err'}">${ok?'✅ Thành công':'❌ Thất bại'}</span>
+      <span>${escapeHtml(stageLabel)}</span>
+      <span>⏱ ${escapeHtml(String(result.durationMs??'—'))} ms</span>
+      ${result.exit_code!=null && !ok?`<span>exit: ${escapeHtml(String(result.exit_code))}</span>`:''}
+      ${result.timed_out?'<span class="err">⏳ Quá thời gian (2s)</span>':''}
+      ${result.signal && !ok?`<span>signal: ${escapeHtml(String(result.signal))}</span>`:''}
+      ${modeLabel?`<span>🔧 ${escapeHtml(modeLabel)}</span>`:''}
       ${result.compiler?`<span>⚙️ ${escapeHtml(String(result.compiler))}</span>`:''}
     `;
     o.appendChild(meta);
@@ -372,11 +446,16 @@ int main() {
     const endpoints=envJudge0?[envJudge0]:publicEndpoints;
     for(const base of endpoints){
       try{
-        const url=`${base.replace(/\/+$/,'')}/submissions?base64_encoded=false&wait=true`;
-        const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_code:code,language_id:54,stdin:stdin||''})});
+        const url=`${base.replace(/\/+$/,'')}/submissions?base64_encoded=true&wait=true`;
+        const codeB64 = btoa(unescape(encodeURIComponent(code)));
+        const stdinB64 = btoa(unescape(encodeURIComponent(stdin || '')));
+        const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_code:codeB64,language_id:54,stdin:stdinB64})});
         const text=await res.text(); let data; try{data=JSON.parse(text);}catch{continue;}
         if(!res.ok) continue;
-        const stdout=data.stdout||''; const stderr=data.stderr||''; const compileOutput=data.compile_output||'';
+        // Decode base64 responses
+        const stdout=data.stdout?decodeURIComponent(escape(atob(data.stdout))):'';
+        const stderr=data.stderr?decodeURIComponent(escape(atob(data.stderr))):'';
+        const compileOutput=data.compile_output?decodeURIComponent(escape(atob(data.compile_output))):'';
         const statusId=data.status?.id;
         if(statusId===6 || (compileOutput&&compileOutput.trim())){
           return { success:false, stage:'compile', compile_error:compileOutput||stderr||'Compilation failed', stdout, stderr, mode:'judge0-direct' };
@@ -413,16 +492,16 @@ int main() {
       const text=await r.text(); let j; try{j=text?JSON.parse(text):{};}catch(parseErr){
         const total=+(performance.now()-t0).toFixed(1);
         console.error('[ide.ankb] non-JSON',parseErr,text.slice(0,1000));
-        renderOutput({success:false,stage:'error',stderr:`API returned invalid JSON (status ${r.status}).\nRaw: ${text.slice(0,1000)}\nParse: ${parseErr.message}`,durationMs:total,mode:'parse_error'});
-        setNetwork(false,'API returned HTML not JSON');
-        els.statusMsg.textContent='❌ API error'; return;
+        renderOutput({success:false,stage:'error',stderr:`Server trả về dữ liệu không hợp lệ (HTTP ${r.status}).\n\nVui lòng thử lại sau.`,durationMs:total,mode:'parse_error'});
+        setNetwork(false,'API lỗi định dạng');
+        els.statusMsg.textContent='❌ Lỗi server'; return;
       }
       const total=+(performance.now()-t0).toFixed(1);
       const isRetryable=r.status===503||j.retryable||/OCI runtime|crun: clone|Resource temporarily unavailable|Server busy|pids_limit|Piston 401|whitelist only|Judge0/i.test((j.stderr||'')+(j.error||'')+(j.detail||'')+text);
 
       if(isRetryable && !window.__retried){
         console.warn('[ide.ankb] retryable error, trying Judge0 then Judge0 direct',j);
-        toast('Backend busy, retrying with Judge0 CE...','warn',3000);
+        toast('Backend bận, đang thử lại...','warn',3000);
         if(els.buildBar) els.buildBar.style.width='60%';
         // Try Judge0 direct first (as default per user request)
         let fallback=await tryJudge0Direct(code, stdin);
@@ -447,29 +526,29 @@ int main() {
       if(!r.ok){
         renderOutput({success:false,stage:'error',stderr:j.error||j.stderr||j.detail||('HTTP '+r.status+': '+text.slice(0,1000)),compile_error:j.compile_error||'',durationMs:total,mode:j.mode||currentBackendMode});
         setNetwork(false, `HTTP ${r.status} ${j.error||''}`.trim(), j.mode);
-        toast('Request failed: '+(j.error||j.stderr||r.status),'error');
-        els.statusMsg.textContent='❌ Error';
-        els.runBtn.classList.remove('running'); els.runBtn.classList.add('failed'); els.runLabel.textContent='❌ Failed';
+        toast('Lỗi: '+(j.error||j.stderr||r.status),'error');
+        els.statusMsg.textContent='❌ Lỗi';
+        els.runBtn.classList.remove('running'); els.runBtn.classList.add('failed'); els.runLabel.textContent='❌ Lỗi';
       } else {
         j.durationMs=j.durationMs??total;
         renderOutput(j);
         currentBackendMode=j.mode||currentBackendMode;
         if(els.statusBackend) els.statusBackend.textContent=`Mode: ${currentBackendMode}`;
-        setNetwork(true, `Connected via ${currentBackendMode}`, j.mode);
+        setNetwork(true, `Kết nối qua ${currentBackendMode}`, j.mode);
         if(j.success){
-          els.statusMsg.textContent='✔ Success';
-          toast('Run completed in '+j.durationMs+' ms ['+(j.mode||'')+']','ok',2000);
-          els.runBtn.classList.add('success'); els.runLabel.textContent='✔ Success';
-        } else if(j.timed_out){ els.statusMsg.textContent='⏳ TLE'; toast('Time limit exceeded','warn'); els.runBtn.classList.add('failed'); els.runLabel.textContent='❌ TLE'; }
-        else if(j.stage==='compile'){ els.statusMsg.textContent='❌ Compile Error'; toast('Compilation error','error'); els.runBtn.classList.add('failed'); els.runLabel.textContent='❌ Compile Error'; }
-        else { els.statusMsg.textContent='💥 Runtime'; toast('Runtime error exit '+ (j.exit_code??'?'),'warn'); els.runBtn.classList.add('failed'); els.runLabel.textContent='💥 Failed'; }
+          els.statusMsg.textContent='✔ Thành công';
+          toast('Chạy xong trong '+j.durationMs+' ms','ok',2000);
+          els.runBtn.classList.add('success'); els.runLabel.textContent='✔ OK';
+        } else if(j.timed_out){ els.statusMsg.textContent='⏳ Quá thời gian'; toast('Code chạy quá 2 giây','warn'); els.runBtn.classList.add('failed'); els.runLabel.textContent='❌ TLE'; }
+        else if(j.stage==='compile'){ els.statusMsg.textContent='❌ Lỗi biên dịch'; toast('Có lỗi biên dịch','error'); els.runBtn.classList.add('failed'); els.runLabel.textContent='❌ Compile Error'; }
+        else { els.statusMsg.textContent='💥 Runtime Error'; toast('Lỗi runtime, exit code '+ (j.exit_code??'?'),'warn'); els.runBtn.classList.add('failed'); els.runLabel.textContent='💥 Runtime'; }
         els.statusTime.textContent=j.durationMs+' ms'; els.timeChip.textContent=j.durationMs+' ms';
         setTimeout(()=>{ els.runBtn.classList.remove('success','failed','running'); els.runLabel.textContent=origLabel; }, 2500);
       }
     }catch(e){
       setNetwork(false, e.message, 'offline');
-      renderOutput({success:false,stage:'error',stderr:`Network error: ${String(e&&e.message||e)}\n\n- Piston 401 whitelist, Judge0 CE, Judge0 recommended\n- Check F12 > Network > /api/run`,durationMs:+(performance.now()-t0).toFixed(1)});
-      toast('Network error: '+(e.message||e),'error'); els.statusMsg.textContent='🔴 Offline';
+      renderOutput({success:false,stage:'error',stderr:`Không thể kết nối đến server: ${String(e&&e.message||e)}\n\nVui lòng kiểm tra kết nối mạng và thử lại.`,durationMs:+(performance.now()-t0).toFixed(1)});
+      toast('Mất kết nối: '+(e.message||e),'error'); els.statusMsg.textContent='🔴 Mất kết nối';
       els.runBtn.classList.remove('running'); els.runBtn.classList.add('failed'); els.runLabel.textContent='❌ Offline';
     } finally {
       running=false; els.runBtn.disabled=false;
@@ -484,15 +563,15 @@ int main() {
     if(ok===true){
       els.connBadge.className='badge online';
       els.netLabel.textContent='🟢 Online';
-      if(els.connTooltip) els.connTooltip.textContent=`Connected via ${currentBackendMode||'backend'}\nBackend: ${currentBackendMode}\n${msg||''}\nClick to re-check`;
+      if(els.connTooltip) els.connTooltip.textContent=`Đã kết nối qua ${currentBackendMode||'backend'}\n${msg||''}\nNhấn để kiểm tra lại`;
     } else if(ok==='connecting'){
       els.connBadge.className='badge connecting';
-      els.netLabel.textContent='🟡 Connecting...';
-      if(els.connTooltip) els.connTooltip.textContent=`Connecting...\n${msg||''}`;
+      els.netLabel.textContent='🟡 Đang kết nối...';
+      if(els.connTooltip) els.connTooltip.textContent=`Đang kết nối...\n${msg||''}`;
     } else {
       els.connBadge.className='badge offline';
-      els.netLabel.textContent='🔴 Offline';
-      if(els.connTooltip) els.connTooltip.textContent=`Backend unavailable\nMode: ${currentBackendMode}\nError: ${msg||'Unknown'}\nFix:\n- Deploy backend: docker-compose up -d\n- Or set JUDGE0_API_URL\n- Or set JUDGE0_API_URL`;
+      els.netLabel.textContent='🔴 Mất kết nối';
+      if(els.connTooltip) els.connTooltip.textContent=`Mất kết nối server\nBackend: ${currentBackendMode}\nLỗi: ${msg||'Không rõ'}\n\nNhấn để thử kết nối lại`;
     }
   }
 

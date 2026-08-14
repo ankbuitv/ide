@@ -137,13 +137,19 @@ async function tryJudge0(code, stdin) {
   const apiHost = process.env.JUDGE0_API_HOST || '';
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) { headers['X-RapidAPI-Key'] = apiKey; if (apiHost) headers['X-RapidAPI-Host'] = apiHost; }
-  const url = `${judge0Url}/submissions?base64_encoded=false&wait=true`;
+  const url = `${judge0Url}/submissions?base64_encoded=true&wait=true`;
   try {
-    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ source_code: code, language_id: languageId, stdin: stdin || '' }) });
+    // Encode code and stdin to base64
+    const codeB64 = Buffer.from(code, 'utf8').toString('base64');
+    const stdinB64 = Buffer.from(stdin || '', 'utf8').toString('base64');
+    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ source_code: codeB64, language_id: languageId, stdin: stdinB64 }) });
     const text = await res.text(); let data; try { data = JSON.parse(text); } catch { data = null; }
-    if (!res.ok) return { error: `Judge0 ${res.status}: ${text.slice(0,2000)}`, status: res.status };
-    if (!data) return { error: `Judge0 invalid JSON: ${text.slice(0,1000)}` };
-    const stdout = data.stdout || ''; const stderr = data.stderr || ''; const compileOutput = data.compile_output || '';
+    if (!res.ok) return { error: `Judge0 ${res.status}: ${text.slice(0,500)}`, status: res.status };
+    if (!data) return { error: `Judge0 invalid JSON: ${text.slice(0,500)}` };
+    // Decode base64 responses
+    const stdout = data.stdout ? Buffer.from(data.stdout, 'base64').toString('utf8') : '';
+    const stderr = data.stderr ? Buffer.from(data.stderr, 'base64').toString('utf8') : '';
+    const compileOutput = data.compile_output ? Buffer.from(data.compile_output, 'base64').toString('utf8') : '';
     const statusId = data.status?.id;
     if (statusId === 6 || (compileOutput && compileOutput.trim())) {
       return { success: false, stage: 'compile', stdout, stderr, compile_error: compileOutput || stderr || 'Compilation failed', exit_code: statusId, mode: 'judge0', judge0Status: data.status?.description, time: data.time, memory: data.memory };
