@@ -16,13 +16,19 @@ interface EditorProps {
   code: string;
   onChange: (value: string) => void;
   language?: string;
+  onCursorChange?: (line: number, col: number) => void;
 }
 
-export default function Editor({ code, onChange, language = "cpp" }: EditorProps) {
+export default function Editor({ code, onChange, language = "cpp", onCursorChange }: EditorProps) {
   const editorRef = useRef<any>(null);
 
   const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+
+    // Report cursor position for the status bar
+    editor.onDidChangeCursorPosition((e: any) => {
+      onCursorChange?.(e.position.lineNumber, e.position.column);
+    });
 
     // Monaco's built-in C++ mode does not expose a `languages.cpp.setDefaults`
     // API. Calling it throws during editor mount on production WebView2 builds.

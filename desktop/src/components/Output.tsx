@@ -8,10 +8,10 @@ interface OutputProps {
 export default function Output({ result, running }: OutputProps) {
   if (running) {
     return (
-      <div className="output-panel">
+      <div className="output info">
         <div className="output-loading">
-          <div className="spinner" />
-          <span>Đang biên dịch và chạy...</span>
+          <span className="spinner dark" />
+          <span>Compiling &amp; running…</span>
         </div>
       </div>
     );
@@ -19,66 +19,56 @@ export default function Output({ result, running }: OutputProps) {
 
   if (!result) {
     return (
-      <div className="output-panel">
-        <div className="output-empty">
-          Nhấn <kbd>F9</kbd> hoặc nút <b>▶ Chạy</b> để biên dịch và chạy code
-        </div>
+      <div className="output">
+        <div className="empty">// Run your code (F9) to see the output here</div>
       </div>
     );
   }
 
+  const cls = result.success ? "output success" : "output error";
+
   return (
-    <div className="output-panel">
+    <div className={cls}>
       {/* Compile Error */}
       {result.stage === "compile" && result.compile_error && (
-        <div className="output-error">
-          <div className="error-header">❌ Lỗi biên dịch</div>
-          <pre className="error-detail">{result.compile_error}</pre>
-        </div>
+        <>
+          <div className="compile-error">❌ Compilation Error</div>
+          <pre className="stderr">{result.compile_error}</pre>
+        </>
       )}
 
       {/* Runtime Error */}
       {result.stage === "error" && (
-        <div className="output-error">
-          <div className="error-header">💥 Lỗi Runtime</div>
-          <pre className="error-detail">{result.stderr}</pre>
-        </div>
+        <>
+          <div className="compile-error">💥 Runtime Error</div>
+          <pre className="stderr">{result.stderr}</pre>
+        </>
       )}
 
-      {/* Success output */}
+      {/* Program output */}
       {result.stage === "run" && (
         <>
           {result.stdout ? (
-            <pre className="output-stdout">{result.stdout}</pre>
+            <pre className="stdout">{result.stdout}</pre>
           ) : (
-            <div className="output-empty">
-              // Không có output
-            </div>
+            <div className="empty">// (no output)</div>
           )}
           {result.stderr && (
-            <pre className="output-stderr">
-              <span className="stderr-label">⚠️ stderr:</span>
-              {"\n"}{result.stderr}
-            </pre>
+            <pre className="stderr">{"stderr:\n"}{result.stderr}</pre>
           )}
         </>
       )}
 
       {/* Meta bar */}
-      <div className="output-meta">
-        <span className={result.success ? "meta-ok" : "meta-err"}>
-          {result.success ? "✅ Thành công" : "❌ Thất bại"}
+      <div className="meta">
+        <span className={result.success ? "ok" : "err"}>
+          {result.success ? "✓ Success" : "✗ Failed"}
         </span>
-        <span>⏱ {result.duration_ms?.toFixed(1)}ms</span>
-        {result.exit_code != null && (
-          <span>exit: {result.exit_code}</span>
-        )}
-        {result.timed_out && (
-          <span className="meta-warn">⏳ Quá thời gian</span>
-        )}
-        {result.signal && (
-          <span>signal: {result.signal}</span>
-        )}
+        <span>⏱ {result.duration_ms?.toFixed(1)} ms</span>
+        {result.exit_code != null && <span>exit: {result.exit_code}</span>}
+        {result.timed_out && <span className="err">⏳ Timed out</span>}
+        {result.signal && <span>signal: {result.signal}</span>}
+        {result.compiler_used && <span>{result.compiler_used}</span>}
       </div>
     </div>
   );
