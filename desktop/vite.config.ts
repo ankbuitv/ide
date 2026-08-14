@@ -6,8 +6,11 @@ export default defineConfig({
   plugins: [react()],
   clearScreen: false,
   server: {
+    host: "0.0.0.0",
     port: 1420,
     strictPort: true,
+    // Tauri uses localhost; hosted development previews use a proxy hostname.
+    allowedHosts: true,
   },
   envPrefix: ["VITE_", "TAURI_"],
   build: {

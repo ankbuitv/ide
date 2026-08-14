@@ -1,6 +1,16 @@
 import { useRef } from "react";
-import MonacoEditor, { type OnMount } from "@monaco-editor/react";
+import MonacoEditor, { loader, type OnMount } from "@monaco-editor/react";
+import * as monaco from "monaco-editor/editor/editor.api.js";
+import "monaco-editor/languages/definitions/cpp/register.js";
+import EditorWorker from "monaco-editor/editor/editor.worker.js?worker";
 import type { editor, Position } from "monaco-editor";
+
+// Ship Monaco with the desktop app instead of downloading it from a CDN.
+// This prevents an empty editor on offline/restricted Windows installations.
+(window as any).MonacoEnvironment = {
+  getWorker: () => new EditorWorker(),
+};
+loader.config({ monaco });
 
 interface EditorProps {
   code: string;
@@ -14,10 +24,9 @@ export default function Editor({ code, onChange, language = "cpp" }: EditorProps
   const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
 
-    // Configure C++ IntelliSense
-    monaco.languages.cpp.setDefaults({
-      ...monaco.languages.cpp,
-    });
+    // Monaco's built-in C++ mode does not expose a `languages.cpp.setDefaults`
+    // API. Calling it throws during editor mount on production WebView2 builds.
+    // Register our completions through the stable language API instead.
 
     // Add snippets
     monaco.languages.registerCompletionItemProvider("cpp", {
@@ -80,6 +89,12 @@ export default function Editor({ code, onChange, language = "cpp" }: EditorProps
         language={language}
         theme="vs-dark"
         value={code}
+        loading={(
+          <div className="editor-loading">
+            <span className="editor-loading-spinner" />
+            Đang tải Monaco Editor…
+          </div>
+        )}
         onMount={handleMount}
         onChange={(value) => onChange(value || "")}
         options={{

@@ -19,7 +19,9 @@
         "resizable": true,
         "fullscreen": false,
         "center": true,
-        "decorations": true
+        "decorations": true,
+        "label": "main",
+        "backgroundColor": "#070A12"
       }
     ],
     "security": {
@@ -39,9 +41,25 @@
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
-      "timestampUrl": "",
+      "timestampUrl": "http://timestamp.digicert.com",
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "headerImage": "installer/header.bmp",
+        "sidebarImage": "installer/sidebar.bmp",
+        "languages": [
+          "Vietnamese",
+          "English"
+        ],
+        "displayLanguageSelector": false,
+        "compression": "lzma",
+        "startMenuFolder": "CP IDE"
+      },
+      "allowDowngrades": false,
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
       }
     },
     "macOS": {
@@ -57,7 +75,13 @@
       "appimage": {
         "bundleMediaFramework": true
       }
-    }
+    },
+    "publisher": "ankbuitv",
+    "homepage": "https://ide.ankb.qzz.io",
+    "copyright": "Copyright © 2026 ankbuitv",
+    "category": "DeveloperTool",
+    "shortDescription": "A fast native IDE for competitive programming.",
+    "longDescription": "CP IDE is a focused competitive programming workspace with Monaco Editor and local C++ compiler support."
   },
   "plugins": {
     "shell": {
