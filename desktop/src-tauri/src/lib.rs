@@ -4,9 +4,7 @@ mod compiler;
 mod terminal;
 mod database;
 
-use tauri::Manager;
-
-pub use compiler::{compile_cpp, CompileOptions, CompileResult};
+pub use compiler::{compile_cpp, CompileResult};
 pub use terminal::{pty_write, pty_resize};
 pub use database::{init_db, save_submission, get_submissions};
 
@@ -26,7 +24,8 @@ async fn read_file(path: String) -> Result<String, String> {
 #[tauri::command]
 async fn open_file_dialog(app: tauri::AppHandle) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
-    let file = app.dialog()
+    let file = app
+        .dialog()
         .file()
         .add_filter("C++ Source", &["cpp", "cc", "cxx", "c"])
         .add_filter("All Files", &["*"])
@@ -37,9 +36,20 @@ async fn open_file_dialog(app: tauri::AppHandle) -> Result<Option<String>, Strin
 
 /// Save file dialog
 #[tauri::command]
-async fn save_file_dialog(default_name: String) -> Result<Option<String>, String> {
-    // For now return None - will implement with tauri-plugin-dialog
-    Ok(None)
+async fn save_file_dialog(
+    app: tauri::AppHandle,
+    default_name: String,
+) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let file = app
+        .dialog()
+        .file()
+        .set_file_name(&default_name)
+        .add_filter("C++ Source", &["cpp", "cc", "cxx", "c"])
+        .add_filter("All Files", &["*"])
+        .blocking_save_file();
+
+    Ok(file.map(|p| p.to_string()))
 }
 
 /// List files in directory
@@ -56,16 +66,15 @@ async fn list_files(dir: String) -> Result<Vec<compiler::FileInfo>, String> {
             name: entry.file_name().to_string_lossy().to_string(),
             path: entry.path().to_string_lossy().to_string(),
             size: meta.len(),
-            modified: meta.modified()
+            modified: meta
+                .modified()
                 .map(|t| format!("{:?}", t))
                 .unwrap_or_default(),
             is_dir: meta.is_dir(),
         });
     }
 
-    files.sort_by(|a, b| {
-        b.is_dir.cmp(&a.is_dir).then(a.name.cmp(&b.name))
-    });
+    files.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.cmp(&b.name)));
 
     Ok(files)
 }
@@ -75,10 +84,10 @@ async fn list_files(dir: String) -> Result<Vec<compiler::FileInfo>, String> {
 async fn get_config() -> Result<serde_json::Value, String> {
     let config_path = get_config_path();
     if config_path.exists() {
-        let content = std::fs::read_to_string(&config_path)
-            .map_err(|e| e.to_string())?;
-        let config: serde_json::Value = serde_json::from_str(&content)
-            .unwrap_or(serde_json::json!({}));
+        let content =
+            std::fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
+        let config: serde_json::Value =
+            serde_json::from_str(&content).unwrap_or(serde_json::json!({}));
         Ok(config)
     } else {
         Ok(default_config())
@@ -92,8 +101,11 @@ async fn save_config(config: serde_json::Value) -> Result<(), String> {
     if let Some(parent) = config_path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    std::fs::write(&config_path, serde_json::to_string_pretty(&config).unwrap())
-        .map_err(|e| format!("Không thể lưu config: {}", e))
+    std::fs::write(
+        &config_path,
+        serde_json::to_string_pretty(&config).unwrap(),
+    )
+    .map_err(|e| format!("Không thể lưu config: {}", e))
 }
 
 fn get_config_path() -> std::path::PathBuf {

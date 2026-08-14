@@ -6,6 +6,7 @@ use std::process::Command;
 use std::time::Instant;
 use tempfile::TempDir;
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct CompileOptions {
     code: String,
@@ -125,17 +126,6 @@ pub async fn compile_cpp(
     std::fs::write(&stdin_path, &stdin).map_err(|e| format!("Không thể ghi stdin: {}", e))?;
 
     // Compile
-    let compile_args = if compiler == "msvc" {
-        vec![
-            std_flag.as_str(),
-            "/O2",
-            "/EHsc",
-            "/Fe:",
-        ]
-    } else {
-        vec![]
-    };
-
     let compile_output = if compiler == "msvc" {
         Command::new(&compiler_path)
             .args(&[
@@ -197,30 +187,34 @@ pub async fn compile_cpp(
     }
 
     // Run the binary
-    let run_start = Instant::now();
     let run_result = run_binary(&bin_path, &stdin_path, timeout_ms);
-    let run_duration = run_start.elapsed().as_secs_f64() * 1000.0;
-
     let total_duration = start.elapsed().as_secs_f64() * 1000.0;
 
-    match run_result {
-        RunOutput { stdout, stderr, exit_code, timed_out, signal } => {
-            let success = exit_code == Some(0) && !timed_out;
-            Ok(CompileResult {
-                success,
-                stage: if success || exit_code.is_some() { "run".to_string() } else { "error".to_string() },
-                stdout,
-                stderr: stderr.clone(),
-                compile_error: String::new(),
-                duration_ms: total_duration,
-                exit_code,
-                timed_out,
-                signal,
-                compiler_used: Some(compiler_path),
-                memory_kb: None,
-            })
-        }
-    }
+    let RunOutput {
+        stdout,
+        stderr,
+        exit_code,
+        timed_out,
+        signal,
+    } = run_result;
+    let success = exit_code == Some(0) && !timed_out;
+    Ok(CompileResult {
+        success,
+        stage: if success || exit_code.is_some() {
+            "run".to_string()
+        } else {
+            "error".to_string()
+        },
+        stdout,
+        stderr,
+        compile_error: String::new(),
+        duration_ms: total_duration,
+        exit_code,
+        timed_out,
+        signal,
+        compiler_used: Some(compiler_path),
+        memory_kb: None,
+    })
 }
 
 struct RunOutput {
@@ -237,16 +231,23 @@ fn run_binary(bin_path: &std::path::Path, stdin_path: &std::path::Path, timeout_
 
     let stdin_data = std::fs::read_to_string(stdin_path).unwrap_or_default();
 
-    let mut child = Command::new(bin_path)
+    let mut child = match Command::new(bin_path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .unwrap_or_else(|e| {
-            return Command::new("false")
-                .spawn()
-                .expect("failed to spawn fallback");
-        });
+    {
+        Ok(c) => c,
+        Err(e) => {
+            return RunOutput {
+                stdout: String::new(),
+                stderr: format!("Không thể chạy binary: {}", e),
+                exit_code: Some(-1),
+                timed_out: false,
+                signal: None,
+            };
+        }
+    };
 
     // Write stdin
     if let Some(ref mut stdin) = child.stdin {

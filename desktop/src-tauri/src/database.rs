@@ -1,7 +1,7 @@
 // CP IDE - SQLite Database Module
 // Stores submission history, problems, test cases
 
-use rusqlite::{Connection, Result as SqlResult, params};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 
