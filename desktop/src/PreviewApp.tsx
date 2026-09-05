@@ -4,6 +4,7 @@ import Editor from "./components/Editor";
 import { runJudge0 } from "./lib/judge0";
 import { fetchOjSnapshot, loadOjConnections, OJ_DEFINITIONS, saveOjConnections, type OjConnection, type OjId, type OjSnapshot } from "./lib/oj";
 import "./styles/Preview.css";
+import "./styles/OjAccounts.css";
 
 type Channel = "standard" | "beta" | "nightly";
 type Modal = "workspace" | "templates" | "settings" | "search" | null;
