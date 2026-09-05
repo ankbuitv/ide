@@ -169,15 +169,38 @@ Config file: `%APPDATA%/ide-ankb/config.json` (Windows) hoặc `~/.config/ide-an
 
 ## 📦 Release Builds (GitHub Actions)
 
-Push a tag `v*` to trigger multi-platform builds:
+Web luôn phát hành **Standard**. Desktop có 3 channel độc lập, mỗi channel có product name, app identifier và file cài riêng:
+
+- **Standard** — ổn định, khuyến nghị dùng hằng ngày
+- **Beta** — thử nghiệm sớm
+- **Nightly** — VIP Pro Lab, nhiều tính năng mới nhất
+
+Build channel ở local:
+
+```bash
+npm run tauri:build:standard
+npm run tauri:build:beta
+npm run tauri:build:nightly
+```
+
+Tạo bản Windows portable sau khi build:
+
+```powershell
+npm run portable:package -- -Channel standard
+```
+
+Portable có `portable.flag`, vì vậy config và database được lưu trong thư mục `data/` cạnh file `.exe`, không chạm vào AppData. Portable vẫn cần Microsoft WebView2 Runtime trên Windows.
+
+Workflow build nằm ở `.github/workflows/release.yml`. Có thể chạy bằng `Actions → Build and release ide.ankb desktop channels → Run workflow`, hoặc push tag `v*`:
 
 ```bash
 git tag v1.1.0
 git push origin v1.1.0
 ```
 
-Auto-builds:
-- ✅ Windows: `.exe` + `.msi`
+Mỗi lần chạy sẽ tạo artifact riêng cho từng channel và từng hệ điều hành. Các channel Beta/Nightly dùng config riêng trong `scripts/build-channel.mjs`, tạo file cài riêng:
+
+- ✅ Windows: `.exe` + `.msi` + `portable.zip`
 - ✅ macOS: `.app` + `.dmg` (Intel + Apple Silicon)
 - ✅ Linux: `.AppImage` + `.deb`
 

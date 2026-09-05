@@ -1,6 +1,7 @@
 import React, { Component, type ErrorInfo, type ReactNode } from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import PreviewApp from "./PreviewApp";
 import "./styles/global.css";
 
 declare global {
@@ -49,7 +50,7 @@ if (!rootElement) throw new Error("Missing #root element");
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      {new URLSearchParams(window.location.search).get("legacy") === "1" ? <App /> : <PreviewApp />}
     </ErrorBoundary>
   </React.StrictMode>,
 );

@@ -16,18 +16,19 @@ import "./styles/App.css";
 
 const DEFAULT_CODE = `#include <bits/stdc++.h>
 using namespace std;
-
-#define fors(i, a, b) for (int i = a; i < b; i++)
+#define fw(i, a, b) for (int i = a; i < b; i++)
+#define rt(i, a, b) for (int i = a; i > b; i--)
 #define ll long long
 
 void sub() {
     ios_base::sync_with_stdio(false);
-    cin.tie(0); cout.tie(0);
+    cin.tie(nullptr);
 }
 
 void sol() {
-    cout << "Hello world!" << endl;
+    cout << "Hell yeah!";
 }
+
 
 int main() {
     sub();

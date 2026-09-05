@@ -150,7 +150,17 @@ async fn save_config(config: serde_json::Value) -> Result<(), String> {
     .map_err(|e| format!("Không thể lưu config: {}", e))
 }
 
+fn portable_root() -> Option<std::path::PathBuf> {
+    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    let marker = exe_dir.join("portable.flag");
+    marker.is_file().then_some(exe_dir)
+}
+
 fn get_config_path() -> std::path::PathBuf {
+    if let Some(root) = portable_root() {
+        return root.join("data").join("config.json");
+    }
+
     dirs::config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("ide-ankb")

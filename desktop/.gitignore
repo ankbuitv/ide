@@ -4,6 +4,7 @@ dist/
 
 # Build
 src-tauri/target/
+src-tauri/tauri.*.generated.json
 
 # IDE
 .vscode/
