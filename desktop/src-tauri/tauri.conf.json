@@ -1,6 +1,6 @@
 {
   "productName": "ide.ankb",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "identifier": "com.ankb.ide",
   "build": {
     "beforeDevCommand": "npm run dev",
