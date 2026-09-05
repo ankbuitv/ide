@@ -15,7 +15,9 @@ const channels = {
   beta: {
     productName: "ide.ankb Beta",
     identifier: "com.ankb.ide.beta",
-    versionSuffix: "-beta.1",
+    // Numeric-only prerelease: WiX (MSI bundler) rejects non-numeric
+    // identifiers like "beta.1" ("must be numeric-only ... for msi target").
+    versionSuffix: "-1",
     title: "ide.ankb Beta — C++ IDE",
     folder: "ide.ankb Beta",
     description: "Early-access desktop release",
@@ -23,7 +25,8 @@ const channels = {
   nightly: {
     productName: "ide.ankb Nightly",
     identifier: "com.ankb.ide.nightly",
-    versionSuffix: "-nightly.1",
+    // Numeric-only prerelease, see beta.
+    versionSuffix: "-2",
     title: "ide.ankb Nightly — VIP Pro Lab",
     folder: "ide.ankb Nightly",
     description: "Experimental VIP Pro desktop release",
