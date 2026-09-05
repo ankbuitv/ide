@@ -11,6 +11,28 @@ export default defineConfig({
     strictPort: true,
     // Tauri uses localhost; hosted development previews use a proxy hostname.
     allowedHosts: true,
+    proxy: {
+      // Public OJ endpoints do not consistently send CORS headers. Keep the
+      // web development preview functional without hiding network failures.
+      "/oj-proxy/codeforces": {
+        target: "https://codeforces.com",
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/oj-proxy\/codeforces/, ""),
+      },
+      "/oj-proxy/vnoj": {
+        target: "https://oj.vnoi.info",
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/oj-proxy\/vnoj/, ""),
+      },
+      "/oj-proxy/tbcpc": {
+        target: "https://oj.tbcpc.id.vn",
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/oj-proxy\/tbcpc/, ""),
+      },
+    },
   },
   envPrefix: ["VITE_", "TAURI_"],
   build: {

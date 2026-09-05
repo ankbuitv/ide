@@ -1,0 +1,201 @@
+/* OJ account layout is kept in its own stylesheet so it cannot be hidden by the legacy editor styles. */
+.oj-accounts-card {
+  display: block;
+  width: 100%;
+  margin: 0 0 16px;
+  padding: 16px 17px;
+  border: 1px solid var(--p-border);
+  border-radius: 13px;
+  background: linear-gradient(145deg, rgba(20,25,39,.86), rgba(12,16,27,.76));
+}
+.oj-accounts-card .section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.oj-accounts-card .section-head > button {
+  display: inline-flex;
+  width: auto;
+  height: auto;
+  align-items: center;
+  gap: 5px;
+  padding: 0 2px;
+  border: 0;
+  color: var(--p-cyan);
+  background: transparent;
+  font-size: 10px;
+}
+.oj-account-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+.oj-account-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 29px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid rgba(148,163,184,.1);
+  border-radius: 9px;
+  background: rgba(255,255,255,.025);
+}
+.oj-account-row > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+.oj-account-row strong {
+  overflow: hidden;
+  color: var(--p-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 600;
+}
+.oj-account-row small {
+  overflow: hidden;
+  color: var(--p-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 8px var(--p-mono);
+}
+.oj-row-state {
+  grid-column: 2;
+  overflow: hidden;
+  color: var(--p-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 8px var(--p-mono);
+}
+.oj-account-row > button {
+  grid-column: 2;
+  justify-self: start;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  color: var(--p-cyan);
+  background: transparent;
+  font: 8px var(--p-mono);
+}
+.oj-mark {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  flex: 0 0 29px;
+  place-items: center;
+  border-radius: 8px;
+  color: #fff;
+  font: 600 8px var(--p-mono);
+}
+.oj-codeforces { background: linear-gradient(145deg,#4e9de8,#2f5da3); }
+.oj-vnoj { background: linear-gradient(145deg,#e18b49,#8c3f29); }
+.oj-tbcpc { background: linear-gradient(145deg,#8c73ec,#4f3b9c); }
+.account-trigger > span {
+  display: flex !important;
+  min-width: 68px;
+  flex-direction: column;
+  gap: 2px;
+}
+.account-trigger > span strong,
+.account-trigger > span small {
+  display: block;
+  line-height: 1.2;
+}
+.oj-modal {
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+}
+.judge-connection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(148,163,184,.1);
+}
+.judge-connection-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.judge-connection-head > div:nth-child(2) {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+.account-connect-form {
+  display: flex;
+  gap: 7px;
+}
+.account-connect-form input {
+  min-width: 0;
+  flex: 1;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--p-border);
+  border-radius: 7px;
+  outline: 0;
+  color: var(--p-text);
+  background: rgba(255,255,255,.04);
+  font: 10px var(--p-mono);
+}
+.account-connect-form button {
+  min-width: 65px;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid rgba(103,232,249,.28);
+  border-radius: 7px;
+  color: #07131a;
+  background: linear-gradient(135deg,#81f4ec,#67c7fa);
+  font-size: 9px;
+  font-weight: 700;
+}
+.judge-data-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: var(--p-muted);
+  font: 8px var(--p-mono);
+}
+.judge-data-summary span {
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: rgba(255,255,255,.04);
+}
+.oj-error {
+  padding: 7px 8px;
+  border: 1px solid rgba(255,127,140,.2);
+  border-radius: 6px;
+  color: var(--p-red);
+  background: rgba(255,127,140,.06);
+  font: 8px/1.4 var(--p-mono);
+}
+.disconnect-button {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  color: var(--p-red);
+  background: transparent;
+  font: 8px var(--p-mono);
+}
+@media (max-width: 900px) {
+  .oj-account-list { grid-template-columns: 1fr; }
+  .oj-account-row { grid-template-columns: 29px minmax(0, 1fr) auto; }
+  .oj-row-state { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
+  .oj-account-row > button { grid-column: 2; }
+}
+@media (max-width: 720px) {
+  .account-trigger > span { display: none !important; }
+}
+@media (max-width: 490px) {
+  .oj-account-row { grid-template-columns: 29px minmax(0, 1fr); }
+  .oj-row-state { grid-column: 2; grid-row: auto; }
+  .account-connect-form { flex-direction: column; }
+  .account-connect-form button { width: 100%; }
+}

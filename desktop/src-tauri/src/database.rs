@@ -20,6 +20,15 @@ pub struct Submission {
 }
 
 fn get_db_path() -> std::path::PathBuf {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            let marker = parent.join("portable.flag");
+            if marker.is_file() {
+                return parent.join("data").join("cpide.db");
+            }
+        }
+    }
+
     dirs::data_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("ide-ankb")

@@ -9,7 +9,12 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "channel:config": "node scripts/build-channel.mjs",
+    "tauri:build:standard": "node scripts/build-channel.mjs standard && tauri build --config src-tauri/tauri.standard.generated.json",
+    "tauri:build:beta": "node scripts/build-channel.mjs beta && tauri build --config src-tauri/tauri.beta.generated.json",
+    "tauri:build:nightly": "node scripts/build-channel.mjs nightly && tauri build --config src-tauri/tauri.nightly.generated.json",
+    "portable:package": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-portable.ps1"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
