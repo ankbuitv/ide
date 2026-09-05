@@ -1,3 +1,5 @@
+import { apiBaseUrl, isTauriRuntime } from "./platform";
+
 export type OjId = "codeforces" | "vnoj" | "tbcpc";
 
 export interface OjDefinition {
@@ -70,9 +72,12 @@ const CODEFORCES_STATUS_PAGE_SIZE = 1_000;
 
 function requestUrl(oj: OjId, path: string): string {
   // The Vite proxy keeps browser previews usable when an OJ does not expose
-  // CORS. Tauri and production builds call the public endpoint directly.
+  // CORS. Production builds (desktop and web) call the ide.ankb API proxy:
+  // none of the three judges send permissive CORS headers, so a direct
+  // browser/webview fetch is blocked outside of development.
   if (import.meta.env.DEV) return `/oj-proxy/${oj}${path}`;
-  return `${OJ_DEFINITIONS[oj].baseUrl}${path}`;
+  if (isTauriRuntime()) return `${apiBaseUrl()}/api/oj/${oj}${path}`;
+  return `/api/oj/${oj}${path}`;
 }
 
 async function fetchWithTimeout(url: string): Promise<Response> {

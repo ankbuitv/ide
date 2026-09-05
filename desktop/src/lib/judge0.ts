@@ -5,8 +5,12 @@
  */
 
 import type { CompileResult } from "./tauri";
+import { isTauriRuntime } from "./platform";
 
 export const JUDGE0_BASE = "https://ce.judge0.com";
+
+/** Same-origin API fallback used by the web build (Cloudflare /api/run). */
+const API_RUN_ENDPOINT = "/api/run";
 
 // language_id on Judge0 CE: 54 = "C++ (GCC 9.2.0)" — same value the web
 // version uses in tryJudge0Direct().
@@ -52,6 +56,26 @@ export async function runJudge0(
   code: string,
   stdin: string,
   _cppVersion: string,
+): Promise<CompileResult> {
+  try {
+    return await runJudge0Direct(code, stdin);
+  } catch (error) {
+    // On the web, a direct Judge0 call can still fail (CSP, ad-blockers,
+    // rate limits). Retry through the ide.ankb API, which proxies Judge0 CE
+    // server-side. The desktop app keeps the direct error so its native
+    // g++ fallback path can take over instead.
+    if (isTauriRuntime()) throw error;
+    try {
+      return await runViaApi(code, stdin);
+    } catch {
+      throw error;
+    }
+  }
+}
+
+async function runJudge0Direct(
+  code: string,
+  stdin: string,
 ): Promise<CompileResult> {
   const t0 = performance.now();
   const ctl = new AbortController();
@@ -138,5 +162,53 @@ export async function runJudge0(
     exit_code: ok ? 0 : statusId || 1,
     timed_out: false,
     signal: ok ? null : statusDesc || null,
+  };
+}
+
+/**
+ * Run code through the ide.ankb HTTP API (same origin on the web build).
+ * The endpoint proxies Judge0 CE server-side (plus an optional private
+ * backend), so it works even when ce.judge0.com is unreachable from the
+ * browser. Response shape mirrors CompileResult.
+ */
+async function runViaApi(code: string, stdin: string): Promise<CompileResult> {
+  const ctl = new AbortController();
+  const timer = window.setTimeout(() => ctl.abort(), 60000);
+  let res: Response;
+  try {
+    res = await fetch(API_RUN_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, stdin, cppVersion: "17" }),
+      signal: ctl.signal,
+    });
+  } finally {
+    window.clearTimeout(timer);
+  }
+
+  if (!res.ok && res.status !== 200) {
+    let detail = `API HTTP ${res.status}`;
+    try {
+      const payload = await res.json();
+      if (payload?.error) detail = `${detail}: ${payload.error}`;
+    } catch { /* body was not JSON — keep the status line */ }
+    throw new Error(detail);
+  }
+
+  const data = await res.json();
+  const compileOutput = String(data.compile_error || "");
+  return {
+    success: Boolean(data.success),
+    stage: data.stage === "compile" || data.stage === "run" ? data.stage : "run",
+    stdout: String(data.stdout || ""),
+    stderr: String(data.stderr || ""),
+    compile_error: compileOutput,
+    duration_ms: data.time != null ? Number(data.time) * 1000 : 0,
+    exit_code: data.exit_code ?? null,
+    timed_out: Boolean(data.timed_out) || data.judge0Status === "Time Limit Exceeded",
+    signal: data.timed_out ? "TLE" : null,
+    compiler_used: "Judge0 CE (via ide.ankb API)",
+    memory_kb: data.memory != null ? Number(data.memory) : undefined,
+    engine: "judge0",
   };
 }

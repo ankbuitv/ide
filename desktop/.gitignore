@@ -3,6 +3,8 @@ node_modules/
 dist/
 
 # Build
+dist/
+dist-web/
 src-tauri/target/
 src-tauri/tauri.*.generated.json
 

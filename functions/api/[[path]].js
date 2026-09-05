@@ -33,6 +33,48 @@ int main() {
 
 const VERSION = '1.0.0';
 
+// Read-only proxy for online-judge public data. None of these sites send
+// CORS headers, so browser/webview clients route through this endpoint
+// (GET /api/oj/:oj/<path>). Host whitelist = no open proxy.
+const OJ_BASES = {
+  codeforces: 'https://codeforces.com',
+  vnoj: 'https://oj.vnoi.info',
+  tbcpc: 'https://oj.tbcpc.id.vn',
+};
+
+async function proxyOj(pathname, url) {
+  const rest = pathname.replace(/^\/api\/oj\//, '');
+  const slash = rest.indexOf('/');
+  if (slash <= 0) return jsonResponse({ error: 'Usage: /api/oj/<oj>/<path>' }, 400);
+  const oj = rest.slice(0, slash);
+  const target = rest.slice(slash + 1).replace(/^\/+/, '');
+  const base = OJ_BASES[oj];
+  if (!base) return jsonResponse({ error: `Unknown OJ "${oj}"`, available: Object.keys(OJ_BASES) }, 404);
+  try {
+    const upstream = `${base}/${target}${url.search || ''}`;
+    const upstreamRes = await fetch(upstream, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'ide.ankb',
+        'Accept': 'application/json, text/html;q=0.9, */*;q=0.8',
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(12000),
+    });
+    const body = await upstreamRes.arrayBuffer();
+    return new Response(body, {
+      status: upstreamRes.status,
+      headers: {
+        'Content-Type': upstreamRes.headers.get('Content-Type') || 'application/json; charset=utf-8',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'no-store',
+      },
+    });
+  } catch (e) {
+    return jsonResponse({ error: `OJ upstream failed: ${String(e.message || e)}` }, 502);
+  }
+}
+
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -124,6 +166,11 @@ export async function onRequest(context) {
       return jsonResponse({ language: 'cpp', code: DEFAULT_TEMPLATE, mode: 'judge0' });
     }
 
+    if (pathname.startsWith('/api/oj/') || pathname === '/api/oj') {
+      if (request.method !== 'GET') return jsonResponse({ error: 'Method not allowed, use GET' }, 405);
+      return await proxyOj(pathname, url);
+    }
+
     if (pathname === '/api/run' || pathname === '/api/run/') {
       if (request.method !== 'POST') return jsonResponse({ error: 'Method not allowed, use POST' }, 405);
       let body; try { body = await request.json(); } catch (e) { return jsonResponse({ error: 'Invalid JSON', detail: e.message }, 400); }
@@ -157,7 +204,7 @@ export async function onRequest(context) {
       }, 502);
     }
 
-    return jsonResponse({ error: `Unknown API ${pathname}`, available: ['/api/health', '/api/template', '/api/run'] }, 404);
+    return jsonResponse({ error: `Unknown API ${pathname}`, available: ['/api/health', '/api/template', '/api/run', '/api/oj/<oj>/<path>'] }, 404);
   } catch (err) {
     return jsonResponse({ error: 'Internal error', detail: String(err.message || err) }, 500);
   }
