@@ -13,6 +13,37 @@ Cloudflare Pages for free in 1 minute.
 ![tech](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
 ![deploy](https://img.shields.io/badge/Cloudflare-Pages-F38020?logo=cloudflare&logoColor=white)
 
+## 🖥️🌐 One UI — desktop and web are the same app ("web y hệt desktop")
+
+The desktop app (`desktop/`, Tauri + React + Monaco) and the website
+(`public/`, Cloudflare Pages) share **one codebase and one bundle**:
+
+```
+desktop/src  ──►  vite build (tauri)   ──►  desktop/dist          (bundled into .exe / .app / .AppImage)
+           └────►  npm run build:web   ──►  public/index.html + public/app/*   (served by Pages)
+```
+
+- Run `cd desktop && npm run build:web` after changing the UI, then commit the
+  refreshed `public/` bundle (Pages deploys with **no build command**).
+- Platform differences live in `desktop/src/lib/platform.ts`:
+  - **Run code**: Judge0 CE is called directly (`https://ce.judge0.com`); the web
+    build silently falls back to `POST /api/run` when the direct call is blocked.
+  - **OJ dashboard** (Codeforces / VNOJ / TBCPCOJ): those sites send no CORS
+    headers, so production builds fetch through `GET /api/oj/<oj>/<path>`
+    (same origin on web, `https://ide.ankb.qzz.io` from the desktop app).
+    Local dev uses the Vite dev proxy (`/oj-proxy/*`).
+- Desktop release channels (Standard / Beta / Nightly) are built by
+  `.github/workflows/release.yml`.
+
+### Desktop build notes (CI)
+
+- **Icons must be RGBA PNGs** (color type 6). Tauri's `generate_context!()`
+  panics with `icon … is not RGBA` otherwise — this previously killed the
+  macOS and Linux builds. If icons are ever regenerated, re-export them as
+  RGBA (e.g. `tauri icon`).
+- Linux CI installs `libfuse2` so `appimagetool` can build the AppImage on
+  ubuntu-22.04.
+
 ## 🚀 Deployment Options (3 ways)
 
 ### 1. Cloudflare Pages — Recommended (Free, 1-min setup)
@@ -33,13 +64,14 @@ Best for public demo, no backend hosting needed. Uses included `functions/api/[[
 
 **Files required for Pages:**
 
-- `public/_headers` — security headers + CORS
-- `public/_redirects` — keeps /api/* on Functions (200), SPA fallback
-- `wrangler.toml` — `pages_build_output_dir = "public"`
-- `functions/api/[[path]].js` — serves 3 endpoints:
-  - `GET /api/health` → `{ok, mode:'proxy'|'piston'}`
+- `public/_headers` — security headers + CSP + immutable caching for `/app/*`
+- `public/index.html` + `public/app/*` — the **desktop React UI** built by `cd desktop && npm run build:web`
+- `functions/_routes.json` — routes only `/api/*` to the Function
+- `functions/api/[[path]].js` — serves 4 endpoints:
+  - `GET /api/health` → `{ok, mode:'proxy'|'judge0'}`
   - `GET /api/template` → default C++ template
-  - `POST /api/run` → proxy to BACKEND_URL → Judge0 CE → Piston → Wandbox
+  - `POST /api/run` → proxy to BACKEND_URL → Judge0 CE
+  - `GET /api/oj/<oj>/<path>` → read-only CORS proxy for Codeforces / VNOJ / TBCPCOJ
 
 **Fixes for Pages:**
 
@@ -140,13 +172,15 @@ The Function will then proxy `/api/*` to your backend.
 ├── functions/
 │   └── api/
 │       └── [[path]].js        # Cloudflare Pages Function (proxy + Piston fallback)
-├── public/
-│   ├── index.html             # Monaco editor UI (dark theme)
-│   ├── app.js                 # Frontend controller (graceful JSON parse)
-│   ├── security.js            # Context menu, devtools detection (renamed from guard.js)
-│   ├── config.js              # Injected by CI: window.IDE_API_BASE = '…'
-│   ├── _headers               # Cloudflare Pages headers
-│   └── _redirects             # Cloudflare Pages redirects
+├── desktop/                   # Tauri desktop app — ALSO the source of the web UI
+│   ├── src/                   # React + Monaco app (shared desktop/web)
+│   ├── scripts/build-web.mjs  # builds web bundle into ../public/
+│   ├── vite.web.config.ts     # web build config (public/ has no build step)
+│   └── src-tauri/             # Rust backend (g++ offline, PTY, icons must be RGBA)
+├── public/                    # Cloudflare Pages output (committed)
+│   ├── index.html             # built shell (boot splash + web bundle link)
+│   ├── app/                   # hashed JS/CSS from `npm run build:web`
+│   └── _headers               # CSP + cache rules
 ├── wrangler.toml              # Cloudflare Pages config (output_dir = public)
 ├── Dockerfile                 # Node 20 + g++ + dumb-init
 ├── docker-compose.yml
@@ -190,6 +224,16 @@ Response:
 ### `GET /api/template`
 
 Returns the default C++ template that the editor pre-fills.
+
+### `GET /api/oj/<oj>/<path>`
+
+Read-only CORS proxy for online-judge public data (no credentials involved).
+`<oj>` ∈ `codeforces` | `vnoj` | `tbcpc`; `<path>` is forwarded to the judge's
+public site. GET only, 12s upstream timeout, host-whitelisted.
+
+```json
+{ "error": "Unknown OJ \"xyz\", available": ["codeforces", "vnoj", "tbcpc"] }
+```
 
 ### `GET /api/health`
 

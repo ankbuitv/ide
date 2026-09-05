@@ -245,8 +245,9 @@ function PreviewApp() {
   const folderInputRef = useRef<HTMLInputElement>(null);
   const [settings, setSettings] = useState({ formatOnSave: true, autoSave: true });
   const [now, setNow] = useState(() => new Date());
-  const isDesktop = Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
-  const availableChannels: Channel[] = isDesktop ? ["standard", "beta", "nightly"] : ["standard"];
+  // Web and desktop render the exact same UI, including the release-channel
+  // switcher ("web y hệt desktop").
+  const availableChannels: Channel[] = ["standard", "beta", "nightly"];
   const [focusMode, setFocusMode] = useState(false);
   const [code, setCode] = useState(() => {
     try { return window.localStorage.getItem("ide.ankb.current-source") || templateSource; } catch { return templateSource; }
@@ -681,11 +682,9 @@ function PreviewApp() {
               </aside>
             </div>
 
-            <div className={`bottom-grid ${isDesktop ? "" : "single"}`}>
+            <div className="bottom-grid">
               <section className="activity-card glass-card"><div className="section-head"><div><span className="section-kicker">RECENT ACTIVITY</span><h2>{recentSubmissions.length ? "Recent submissions" : "No submissions yet"}</h2></div><button onClick={() => setAccountOpen(true)}>Manage accounts <Icon name="arrow" size={12} /></button></div><div className="problem-list">{recentSubmissions.length ? recentSubmissions.map((submission, index) => <a className="submission-row" href={submission.url} target="_blank" rel="noreferrer" key={`${submission.oj}-${submission.id}`}><span className={`problem-index ${submission.accepted ? "green-number" : "amber-number"}`}>{String(index + 1).padStart(2, "0")}</span><div><strong>{submission.problem}</strong><small>{OJ_DEFINITIONS[submission.oj].name} · {submission.verdict} · {formatSubmissionDate(submission.submittedAt)}</small></div><span className={submission.accepted ? "solved-check" : "in-progress"}>{submission.accepted ? <Icon name="check" size={12} /> : submission.verdict}</span></a>) : <div className="activity-empty">{connections.length ? "The connected OJ has no submission rows available." : "Connect Codeforces, VNOJ, or TBCPCOJ to load activity."}</div>}</div></section>
-              {isDesktop && (
               <section className="channel-card glass-card"><div className="section-head"><div><span className="section-kicker">RELEASE CHANNEL</span><h2>Choose your build</h2></div><Icon name="spark" size={16} /></div><div className="channel-switcher">{availableChannels.map((item) => <button key={item} className={`channel-option ${channel === item ? "selected" : ""} ${item}`} onClick={() => changeChannel(item)}><span className="channel-radio"><i /></span><div><strong>{item === "standard" ? "Standard" : item === "beta" ? "Beta" : "Nightly"}</strong><small>{item === "standard" ? "Stable & recommended" : item === "beta" ? "Try what's next" : "VIP Pro features"}</small></div>{item === "standard" && <span className="recommended">Recommended</span>}{item === "nightly" && <span className="vip-tag">VIP PRO</span>}</button>)}</div><div className={`channel-note ${channelInfo.className}`}><Icon name="spark" size={14} /><span><strong>{channelInfo.label}:</strong> {channel === "standard" ? "reliable builds for everyday coding." : channel === "beta" ? "preview features may change without notice." : "experimental lab features for power users."}</span></div></section>
-              )}
             </div>
 
             <footer className="preview-footer"><span>ide.ankb <b>v1.2.0</b></span><span className="footer-separator">•</span><span>{connections.length ? "OJ data connected" : "Local workspace"}</span><span className="footer-spacer" /><button onClick={() => setModal("settings")}>Preferences</button></footer>

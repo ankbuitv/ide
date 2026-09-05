@@ -1,6 +1,6 @@
 [package]
 name = "ide-ankb"
-version = "1.1.0"
+version = "1.1.1"
 description = "ide.ankb — C++ desktop IDE (Judge0 online, native g++ offline)"
 authors = ["ankbuitv"]
 edition = "2021"

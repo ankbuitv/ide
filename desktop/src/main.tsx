@@ -3,6 +3,11 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import PreviewApp from "./PreviewApp";
 import "./styles/global.css";
+// App.css holds the base styles of the shared editor shell (.app/.topbar/
+// .workarea/.statusbar/…). PreviewApp's focus-mode editor reuses those classes,
+// so it must be loaded for BOTH entry apps — without it the editor screen
+// renders unstyled (broken layout).
+import "./styles/App.css";
 
 declare global {
   interface Window {

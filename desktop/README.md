@@ -1,6 +1,13 @@
 # ide.ankb — C++ Desktop IDE
 
-Desktop IDE for competitive programming (branded **ide.ankb**, same logo & context menu as the web version), built with **Tauri 2 + React + TypeScript + Rust**.
+Desktop IDE for competitive programming (branded **ide.ankb**), built with **Tauri 2 + React + TypeScript + Rust**.
+
+> **The website is this same app.** `npm run build:web` compiles `src/` into
+> `../public/` (Cloudflare Pages) — web y hệt desktop. See the repo README.
+>
+> **Icons:** every PNG in `src-tauri/icons/` must be **RGBA** (color type 6).
+> RGB-only PNGs make `tauri::generate_context!()` panic — `icon … is not RGBA` —
+> on every platform (this broke the macOS/Linux CI builds once).
 
 ![Architecture](https://img.shields.io/badge/Tauri-2.0-blue)
 ![React](https://img.shields.io/badge/React-18-61dafb)

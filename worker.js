@@ -76,6 +76,43 @@ async function tryJudge0(code, stdin, env) {
   } catch (e) { return { error: `Judge0 exception: ${e.message}` }; }
 }
 
+// Read-only proxy for online-judge public data (no CORS on those sites).
+const OJ_BASES = {
+  codeforces: 'https://codeforces.com',
+  vnoj: 'https://oj.vnoi.info',
+  tbcpc: 'https://oj.tbcpc.id.vn',
+};
+
+async function proxyOj(pathname, url) {
+  const rest = pathname.replace(/^\/api\/oj\//, '');
+  const slash = rest.indexOf('/');
+  if (slash <= 0) return jsonResponse({ error: 'Usage: /api/oj/<oj>/<path>' }, 400);
+  const oj = rest.slice(0, slash);
+  const target = rest.slice(slash + 1).replace(/^\/+/, '');
+  const base = OJ_BASES[oj];
+  if (!base) return jsonResponse({ error: `Unknown OJ "${oj}"`, available: Object.keys(OJ_BASES) }, 404);
+  try {
+    const upstream = `${base}/${target}${url.search || ''}`;
+    const upstreamRes = await fetch(upstream, {
+      method: 'GET',
+      headers: { 'User-Agent': 'ide.ankb', 'Accept': 'application/json, text/html;q=0.9, */*;q=0.8' },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(12000),
+    });
+    const body = await upstreamRes.arrayBuffer();
+    return new Response(body, {
+      status: upstreamRes.status,
+      headers: {
+        'Content-Type': upstreamRes.headers.get('Content-Type') || 'application/json; charset=utf-8',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'no-store',
+      },
+    });
+  } catch (e) {
+    return jsonResponse({ error: `OJ upstream failed: ${String(e.message || e)}` }, 502);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -99,6 +136,10 @@ export default {
             try { const r = await fetch(`${backendUrl}/api/template`, { headers: { Accept: 'application/json' } }); const text = await r.text(); let data; try { data = JSON.parse(text); } catch { data = null; } if (r.ok && data && data.code) return jsonResponse({ language: data.language || 'cpp', code: data.code, mode: 'proxy' }); } catch (_) {}
           }
           return jsonResponse({ language: 'cpp', code: DEFAULT_TEMPLATE, mode: 'judge0' });
+        }
+        if (pathname.startsWith('/api/oj/') || pathname === '/api/oj') {
+          if (request.method !== 'GET') return jsonResponse({ error: 'Method not allowed, use GET' }, 405);
+          return await proxyOj(pathname, url);
         }
         if (pathname === '/api/run' || pathname === '/api/run/') {
           if (request.method !== 'POST') return jsonResponse({ error: 'Method not allowed, use POST' }, 405);
